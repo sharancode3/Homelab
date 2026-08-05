@@ -119,7 +119,7 @@ class BackupEngine:
             completed_at=created_at,
         )
 
-    def verify_manifest_integrity(self, manifest: BackupManifest) -> bool:
+    def _verify_manifest_integrity(self, manifest: BackupManifest) -> bool:
         expected = self._manifest_checksum(manifest)
         return bool(expected) and all(
             checksum_name.endswith(".sha256") and checksum_value
@@ -165,7 +165,7 @@ class BackupEngine:
             executed_stages.append(BackupStage.ARTIFACT_SIMULATION)
 
             self._execute_stage(BackupStage.MANIFEST_VERIFICATION, plan)
-            if not self.verify_manifest_integrity(manifest):
+            if not self._verify_manifest_integrity(manifest):
                 raise BackupVerificationError(
                     f"Backup manifest verification failed for {project_id}."
                 )

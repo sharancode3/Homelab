@@ -19,3 +19,4 @@ class LifecycleOperation(str, Enum):
     STOP = "stop"
     ARCHIVE = "archive"
     FAIL = "fail"
+    RESTORE = "restore"

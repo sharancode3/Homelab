@@ -104,6 +104,15 @@ class LifecycleValidator:
                 LifecycleState.RUNNING,
                 LifecycleState.STOPPED,
             ),
+            LifecycleOperation.RESTORE: (
+                LifecycleState.REGISTERED,
+                LifecycleState.VALIDATED,
+                LifecycleState.DEPLOYED,
+                LifecycleState.RUNNING,
+                LifecycleState.STOPPED,
+                LifecycleState.FAILED,
+                LifecycleState.ARCHIVED,
+            ),
         }
 
         if current_state not in allowed_states[context.operation]:
