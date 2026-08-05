@@ -1,10 +1,8 @@
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
-from jose.exceptions import ExpiredSignatureError
 from sqlalchemy.orm import Session
 
-from app.config import settings
+from app.auth import decode_token
 from app.database import SessionLocal
 from app.models import User
 
@@ -23,28 +21,18 @@ def get_current_user(
     token: str = Security(oauth2_scheme),
     db: Session = Depends(get_db),
 ):
-    try:
-        payload = jwt.decode(
-            token,
-            settings.SECRET_KEY,
-            algorithms=[settings.ALGORITHM],
+    payload = decode_token(token)
+
+    if payload.get("token_type") != "access":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-        if payload.get("token_type") != "access":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
 
-        email = payload.get("sub")
+    email = payload.get("sub")
 
-        if not email:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-    except (ExpiredSignatureError, JWTError):
+    if not email:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",

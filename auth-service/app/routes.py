@@ -1,10 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from jose import JWTError, jwt
-from jose.exceptions import ExpiredSignatureError
 from sqlalchemy.orm import Session
 
-from app.auth import create_access_token, create_refresh_token, hash_password, verify_password
-from app.config import settings
+from app.auth import create_access_token, create_refresh_token, decode_token, hash_password, verify_password
 from app.dependencies import get_current_user, get_db
 from app.models import User
 from app.schemas import RefreshTokenRequest, UserCreate, UserLogin
@@ -87,27 +84,17 @@ def refresh_token(
     payload: RefreshTokenRequest,
     db: Session = Depends(get_db),
 ):
-    try:
-        token_payload = jwt.decode(
-            payload.refresh_token,
-            settings.SECRET_KEY,
-            algorithms=[settings.ALGORITHM],
+    token_payload = decode_token(payload.refresh_token)
+
+    if token_payload.get("token_type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
         )
 
-        if token_payload.get("token_type") != "refresh":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
-            )
+    email = token_payload.get("sub")
 
-        email = token_payload.get("sub")
-
-        if not email:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
-            )
-    except (ExpiredSignatureError, JWTError):
+    if not email:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
