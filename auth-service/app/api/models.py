@@ -28,7 +28,7 @@ class BaseOperationRequest(BaseModel):
 
 
 class DeployRequest(BaseOperationRequest):
-    pass
+    configuration: dict[str, Any] = Field(default_factory=dict)
 
 
 class BackupRequest(BaseOperationRequest):

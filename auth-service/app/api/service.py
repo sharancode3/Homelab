@@ -53,7 +53,12 @@ class APIServiceLayer:
             project_version=req.project_version,
         )
         self._registry.register(entry)
-        self._lifecycle.register(req.project_id)
+        
+        from app.platform.lifecycle.exceptions import LifecycleConflictError
+        try:
+            self._lifecycle.register(req.project_id)
+        except LifecycleConflictError:
+            pass
 
         return ProjectRegisterResponse(
             project_id=req.project_id,
@@ -62,6 +67,12 @@ class APIServiceLayer:
         )
 
     def validate_project(self, project_id: str) -> ValidateResponse:
+        from app.platform.lifecycle.exceptions import LifecycleConflictError
+        try:
+            self._lifecycle.validate(project_id)
+        except LifecycleConflictError:
+            pass
+
         res = self._validation.validate(project_id, "deploy")
         issues = [f"{i.code}: {i.message}" if hasattr(i, "code") else f"{i.category.value}: {i.message}" for i in res.issues]
         return ValidateResponse(
@@ -78,6 +89,7 @@ class APIServiceLayer:
                 operation_type=OperationType.DEPLOY,
                 requested_by=req.requested_by,
                 correlation_id=req.correlation_id,
+                configuration=req.configuration,
             )
         return OperationResponse(
             operation_id=res.operation_id,

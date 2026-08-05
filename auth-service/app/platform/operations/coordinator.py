@@ -129,7 +129,12 @@ class PlatformOperationsCoordinator:
                     failures.clear()
                     
                     if operation_type == OperationType.DEPLOY:
-                        res = self._deployment_engine.deploy(project_id=project_id, requested_by=requested_by)
+                        configuration = kwargs.get("configuration", {})
+                        res = self._deployment_engine.deploy(
+                            project_id=project_id, 
+                            requested_by=requested_by,
+                            configuration=configuration
+                        )
                         completed_steps.append("deploy")
                         if not res.success: failures.append(res.message)
                     elif operation_type == OperationType.BACKUP:

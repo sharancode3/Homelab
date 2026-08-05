@@ -14,8 +14,8 @@ from app.platform.lifecycle import LifecycleManager
 from app.platform.lifecycle.enums import LifecycleOperation, LifecycleState
 from app.platform.validation import ValidationEngine
 from app.platform.validation.enums import ValidationStatus
-from app.project_registry import ProjectRegistryEntry
 from app.project_registry_manager import ProjectRegistryManager
+from app.adapters.interfaces import DeploymentAdapter
 
 
 class DeploymentEngine:
@@ -26,10 +26,13 @@ class DeploymentEngine:
         registry: ProjectRegistryManager,
         lifecycle_manager: LifecycleManager,
         validation_engine: ValidationEngine,
+        deployment_adapter: DeploymentAdapter = None,
     ) -> None:
         self._registry = registry
         self._lifecycle_manager = lifecycle_manager
         self._validation_engine = validation_engine
+        self._deployment_adapter = deployment_adapter
+        self._deployment_handles: dict[str, str] = {}
 
     def create_plan(
         self,
@@ -37,6 +40,7 @@ class DeploymentEngine:
         requested_by: str | None = None,
         timeout_seconds: int = 300,
         retry_count: int = 0,
+        configuration: dict = None,
     ) -> DeploymentPlan:
         project = self._get_project(project_id)
         self._validate_request(project_id, timeout_seconds, retry_count)
@@ -59,6 +63,7 @@ class DeploymentEngine:
             timeout_seconds=timeout_seconds,
             retry_count=retry_count,
             verification_required=True,
+            configuration=configuration or {},
             created_at=datetime.now(timezone.utc),
         )
 
@@ -68,6 +73,7 @@ class DeploymentEngine:
         requested_by: str | None = None,
         timeout_seconds: int = 300,
         retry_count: int = 0,
+        configuration: dict = None,
     ) -> DeploymentResult:
         project = self._get_project(project_id)
         plan = self.create_plan(
@@ -75,6 +81,7 @@ class DeploymentEngine:
             requested_by=requested_by,
             timeout_seconds=timeout_seconds,
             retry_count=retry_count,
+            configuration=configuration,
         )
 
         started_at = datetime.now(timezone.utc)
@@ -144,6 +151,22 @@ class DeploymentEngine:
                 f"Stage {stage.value} is not part of the deployment plan."
             )
 
+        if not self._deployment_adapter:
+            # If no adapter, fallback to no-op
+            return
+
+        try:
+            if stage == DeploymentStage.PREPARATION:
+                handle = self._deployment_adapter.prepare_deployment(plan.project_id, plan.configuration)
+                self._deployment_handles[plan.project_id] = handle
+            elif stage == DeploymentStage.EXECUTION:
+                handle = self._deployment_handles.get(plan.project_id)
+                if not handle:
+                    raise DeploymentException("Cannot execute without a preparation handle.")
+                self._deployment_adapter.execute_deployment(handle)
+        except Exception as e:
+            raise DeploymentException(f"Adapter error during {stage.value}: {e}") from e
+
     def _verify_deployment(
         self,
         plan: DeploymentPlan,
@@ -156,7 +179,7 @@ class DeploymentEngine:
             and plan.verification_required
         )
 
-    def _get_project(self, project_id: str) -> ProjectRegistryEntry:
+    def _get_project(self, project_id: str):
         project = self._registry.get_by_project_id(project_id)
         if project is None:
             raise DeploymentRequestError(f"Unknown project: {project_id}")

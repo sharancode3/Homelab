@@ -8,6 +8,25 @@ from app.config import config
 from app.observability.logger import StructuredLogger
 
 
+from app.api.routes import get_api_service
+from app.api.service import APIServiceLayer
+from app.platform.audit.engine import AuditEngine
+from app.platform.backup.engine import BackupEngine
+from app.platform.deployment.engine import DeploymentEngine
+from app.platform.events.engine import EventEngine
+from app.platform.health.engine import HealthEngine
+from app.platform.lifecycle.manager import LifecycleManager
+from app.platform.operations.coordinator import PlatformOperationsCoordinator
+from app.platform.restore.engine import RestoreEngine
+from app.platform.validation.engine import ValidationEngine
+from app.project_registry_manager import ProjectRegistryManager
+from app.providers.deployment.docker_provider import DockerDeploymentProvider
+from app.storage.providers.sqlite import (
+    SQLiteAuditRepository,
+    SQLiteOperationHistoryRepository,
+    SQLiteProjectRepository,
+)
+
 logger = StructuredLogger(component="app_runtime")
 
 
@@ -15,6 +34,61 @@ logger = StructuredLogger(component="app_runtime")
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Application startup
     logger.info("system_startup", f"Starting {config.app_name} in {config.environment} mode.")
+    
+    import os
+    os.makedirs("data", exist_ok=True)
+    
+    # 1. Repositories
+    project_repo = SQLiteProjectRepository(db_path="data/projects.db")
+    audit_repo = SQLiteAuditRepository(db_path="data/audit.db")
+    history_repo = SQLiteOperationHistoryRepository(db_path="data/history.db")
+    
+    # 2. Managers
+    registry_manager = ProjectRegistryManager(repository=project_repo)
+    lifecycle_manager = LifecycleManager(registry=registry_manager)
+    
+    # 3. Engines
+    audit_engine = AuditEngine(repository=audit_repo)
+    event_engine = EventEngine()
+    health_engine = HealthEngine(registry=registry_manager, lifecycle_manager=lifecycle_manager)
+    validation_engine = ValidationEngine(registry=registry_manager, lifecycle_manager=lifecycle_manager)
+    backup_engine = BackupEngine(registry=registry_manager, lifecycle_manager=lifecycle_manager)
+    restore_engine = RestoreEngine(registry=registry_manager, lifecycle_manager=lifecycle_manager, validation_engine=validation_engine)
+    
+    # 4. Providers
+    docker_provider = DockerDeploymentProvider(simulate=False)
+    
+    # 5. Deployment Engine
+    deployment_engine = DeploymentEngine(
+        registry=registry_manager,
+        lifecycle_manager=lifecycle_manager,
+        validation_engine=validation_engine,
+        deployment_adapter=docker_provider
+    )
+    
+    # 6. Coordinator
+    coordinator = PlatformOperationsCoordinator(
+        lifecycle_manager=lifecycle_manager,
+        validation_engine=validation_engine,
+        deployment_engine=deployment_engine,
+        backup_engine=backup_engine,
+        restore_engine=restore_engine,
+        health_engine=health_engine,
+        event_engine=event_engine,
+        audit_engine=audit_engine,
+        history_repository=history_repo
+    )
+    
+    # 7. API Service Layer
+    api_service = APIServiceLayer(
+        registry=registry_manager,
+        coordinator=coordinator,
+        lifecycle=lifecycle_manager,
+        validation=validation_engine,
+        health=health_engine
+    )
+    
+    app.dependency_overrides[get_api_service] = lambda: api_service
     
     yield
     

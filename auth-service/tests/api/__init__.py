@@ -8,6 +8,12 @@ class BaseModelMock:
     def __init__(self, **kwargs):
         for k, v in kwargs.items():
             setattr(self, k, v)
+            
+    def model_dump(self):
+        return {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
+        
+    def dict(self):
+        return self.model_dump()
 
 pydantic_mock.BaseModel = BaseModelMock
 pydantic_mock.Field = lambda default_factory=None, **kwargs: default_factory() if default_factory else None

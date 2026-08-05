@@ -63,6 +63,27 @@ def build_project() -> ProjectRegistryEntry:
     )
 
 
+from app.adapters.interfaces import DeploymentAdapter
+
+class MockDeploymentAdapter(DeploymentAdapter):
+    def __init__(self):
+        self.prepared = False
+        self.executed = False
+    
+    def prepare_deployment(self, project_id: str, configuration: dict) -> str:
+        self.prepared = True
+        return "mock_handle"
+        
+    def execute_deployment(self, deployment_handle: str) -> bool:
+        self.executed = True
+        return True
+        
+    def check_status(self, deployment_handle: str) -> str:
+        return "running"
+        
+    def rollback(self, deployment_handle: str) -> bool:
+        return True
+
 class DeploymentEngineTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.registry = ProjectRegistryManager(SQLiteProjectRepository())
@@ -72,8 +93,9 @@ class DeploymentEngineTestCase(unittest.TestCase):
         self.lifecycle.register(self.project.project_id)
         self.lifecycle.validate(self.project.project_id)
         self.validation = ValidationEngine(self.registry, self.lifecycle)
+        self.adapter = MockDeploymentAdapter()
         self.engine = DeploymentEngine(
-            self.registry, self.lifecycle, self.validation
+            self.registry, self.lifecycle, self.validation, deployment_adapter=self.adapter
         )
 
     def test_deployment_plan_generation(self) -> None:
@@ -107,13 +129,13 @@ class DeploymentEngineTestCase(unittest.TestCase):
         lifecycle = LifecycleManager(invalid_registry)
         lifecycle.register(project.project_id)
         validation = ValidationEngine(invalid_registry, lifecycle)
-        engine = DeploymentEngine(invalid_registry, lifecycle, validation)
+        engine = DeploymentEngine(invalid_registry, lifecycle, validation, deployment_adapter=MockDeploymentAdapter())
 
         with self.assertRaises(Exception):
             engine.create_plan(project.project_id)
 
     def test_failed_deployment(self) -> None:
-        engine = DeploymentEngine(self.registry, self.lifecycle, self.validation)
+        engine = DeploymentEngine(self.registry, self.lifecycle, self.validation, deployment_adapter=MockDeploymentAdapter())
         engine._execute_stage = lambda stage, plan: None  # type: ignore[method-assign]
         engine._verify_deployment = lambda plan, stages: False  # type: ignore[method-assign]
 

@@ -16,6 +16,7 @@ class DeploymentPlan:
     timeout_seconds: int
     retry_count: int
     verification_required: bool
+    configuration: dict
     created_at: datetime
 
 

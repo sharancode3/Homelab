@@ -1,4 +1,6 @@
+import subprocess
 import unittest
+from unittest.mock import MagicMock, patch
 
 from app.providers.deployment.docker_provider import DockerDeploymentProvider
 from app.providers.deployment.exceptions import (
@@ -71,15 +73,67 @@ class DockerDeploymentProviderTestCase(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(self.provider.check_status(handle), "rolled_back")
 
-    def test_real_execution_raises_error(self) -> None:
+    @patch("app.providers.deployment.docker_provider.subprocess.run")
+    def test_real_preparation_success(self, mock_run) -> None:
         real_provider = DockerDeploymentProvider(simulate=False)
+        mock_run.return_value = MagicMock(returncode=0)
         handle = real_provider.prepare_deployment(self.project_id, self.valid_config)
+        self.assertTrue(handle.startswith(f"deploy_{self.project_id}_"))
+        mock_run.assert_called_once_with(
+            ["docker", "info"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+
+    @patch("app.providers.deployment.docker_provider.subprocess.run")
+    def test_real_execution_success(self, mock_run) -> None:
+        real_provider = DockerDeploymentProvider(simulate=False)
+        mock_run.return_value = MagicMock(returncode=0)
         
-        with self.assertRaises(DockerExecutionError):
-            real_provider.execute_deployment(handle)
-            
-        with self.assertRaises(DockerRollbackError):
-            real_provider.rollback(handle)
+        config_with_ports = {"image": "my-app:latest", "ports": ["8080:8000"], "environment": {"ENV": "prod"}}
+        handle = real_provider.prepare_deployment(self.project_id, config_with_ports)
+        
+        mock_run.reset_mock()
+        mock_run.return_value = MagicMock(returncode=0, stdout="running\n")
+        result = real_provider.execute_deployment(handle)
+        
+        self.assertTrue(result)
+        self.assertEqual(real_provider.check_status(handle), "running")
+        
+        container_name = real_provider._deployments[handle]["container_name"]
+        mock_run.assert_any_call(
+            ["docker", "run", "-d", "--name", container_name, "-p", "8080:8000", "-e", "ENV=prod", "my-app:latest"],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+
+    @patch("app.providers.deployment.docker_provider.subprocess.run")
+    def test_real_status_check(self, mock_run) -> None:
+        real_provider = DockerDeploymentProvider(simulate=False)
+        mock_run.return_value = MagicMock(returncode=0)
+        handle = real_provider.prepare_deployment(self.project_id, self.valid_config)
+        real_provider._deployments[handle]["status"] = "running"
+        
+        mock_run.reset_mock()
+        mock_run.return_value = MagicMock(stdout="exited\n")
+        
+        status = real_provider.check_status(handle)
+        self.assertEqual(status, "stopped (exited)")
+        
+        mock_run.return_value = MagicMock(stdout="running\n")
+        status = real_provider.check_status(handle)
+        self.assertEqual(status, "running")
+
+    @patch("app.providers.deployment.docker_provider.subprocess.run")
+    def test_real_rollback(self, mock_run) -> None:
+        real_provider = DockerDeploymentProvider(simulate=False)
+        mock_run.return_value = MagicMock(returncode=0)
+        handle = real_provider.prepare_deployment(self.project_id, self.valid_config)
+        real_provider.execute_deployment(handle)
+        
+        mock_run.reset_mock()
+        result = real_provider.rollback(handle)
+        
+        self.assertTrue(result)
+        self.assertEqual(real_provider.check_status(handle), "rolled_back")
+        self.assertEqual(mock_run.call_count, 2)
 
 
 if __name__ == "__main__":
