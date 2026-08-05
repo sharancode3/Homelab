@@ -1,4 +1,5 @@
 from __future__ import annotations
+from app.storage.providers.sqlite import SQLiteProjectRepository, SQLiteAuditRepository, SQLiteOperationHistoryRepository
 
 import sys
 import types
@@ -59,7 +60,7 @@ def build_project(project_id: str = "proj_0001") -> ProjectRegistryEntry:
 
 class LifecycleManagerTestCase(unittest.TestCase):
     def setUp(self) -> None:
-        self.registry = ProjectRegistryManager()
+        self.registry = ProjectRegistryManager(SQLiteProjectRepository())
         self.project = build_project()
         self.registry.register(self.project)
         self.manager = LifecycleManager(self.registry)

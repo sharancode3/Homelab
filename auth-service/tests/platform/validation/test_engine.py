@@ -1,4 +1,5 @@
 from __future__ import annotations
+from app.storage.providers.sqlite import SQLiteProjectRepository, SQLiteAuditRepository, SQLiteOperationHistoryRepository
 
 import sys
 import types
@@ -60,7 +61,7 @@ def build_project(
 
 class ValidationEngineTestCase(unittest.TestCase):
     def setUp(self) -> None:
-        self.registry = ProjectRegistryManager()
+        self.registry = ProjectRegistryManager(SQLiteProjectRepository())
         self.lifecycle = LifecycleManager(self.registry)
 
     def test_successful_validation(self) -> None:

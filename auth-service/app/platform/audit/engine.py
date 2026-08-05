@@ -7,13 +7,16 @@ from typing import Any
 from app.platform.audit.enums import AuditCategory, AuditSeverity, AuditStatus
 from app.platform.audit.exceptions import AuditIntegrityError, AuditRecordError
 from app.platform.audit.models import AuditRecord
+from app.security.hardening.audit_security import AuditSecurityLayer
+from app.security.hardening.exceptions import AuditIntegrityError
+from app.storage.interfaces import AuditRepository
 
 
 class AuditEngine:
     """Append-only, immutable recording layer for platform audit events."""
 
-    def __init__(self) -> None:
-        self._records: list[AuditRecord] = []
+    def __init__(self, repository: AuditRepository) -> None:
+        self._repository = repository
 
     def record_event(
         self,
@@ -61,18 +64,31 @@ class AuditEngine:
             integrity_marker=marker,
         )
 
-        self._records.append(record)
+        self._repository.append(record)
         return record
 
     def verify_integrity(self, record: AuditRecord) -> bool:
         """Verify that a record has not been tampered with."""
-        expected_marker = self._generate_integrity_marker(
-            record.audit_id, record.version, record.timestamp, record.category,
-            record.event_type, record.severity, record.source_component,
-            record.target_identity, record.correlation_id, record.actor_context,
-            record.outcome_status, record.summary, record.details
-        )
-        return record.integrity_marker == expected_marker
+        payload = {
+            "audit_id": record.audit_id,
+            "version": record.version,
+            "timestamp": record.timestamp.isoformat(),
+            "category": record.category.value,
+            "event_type": record.event_type,
+            "severity": record.severity.value,
+            "source_component": record.source_component,
+            "target_identity": record.target_identity,
+            "correlation_id": record.correlation_id,
+            "actor_context": record.actor_context,
+            "outcome_status": record.outcome_status.value,
+            "summary": record.summary,
+            "details": record.details,
+        }
+        try:
+            AuditSecurityLayer.verify_record_integrity(payload, record.integrity_marker)
+            return True
+        except AuditIntegrityError:
+            return False
 
     def query(
         self,
@@ -83,20 +99,13 @@ class AuditEngine:
         end_time: datetime | None = None,
     ) -> list[AuditRecord]:
         """Query the audit history with filtering."""
-        results = []
-        for record in self._records:
-            if project_id and record.target_identity != project_id:
-                continue
-            if category and record.category is not category:
-                continue
-            if correlation_id and record.correlation_id != correlation_id:
-                continue
-            if start_time and record.timestamp < start_time:
-                continue
-            if end_time and record.timestamp > end_time:
-                continue
-            results.append(record)
-        return results
+        return self._repository.query(
+            project_id=project_id,
+            category=category,
+            correlation_id=correlation_id,
+            start_time=start_time,
+            end_time=end_time,
+        )
 
     def _validate_input(self, event_type: str, source_component: str, summary: str) -> None:
         if not event_type.strip():
@@ -137,4 +146,4 @@ class AuditEngine:
             "summary": summary,
             "details": details,
         }
-        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+        return AuditSecurityLayer.generate_record_hash(payload)

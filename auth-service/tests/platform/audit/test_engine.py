@@ -1,3 +1,4 @@
+from app.storage.providers.sqlite import SQLiteProjectRepository, SQLiteAuditRepository, SQLiteOperationHistoryRepository
 import unittest
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -9,7 +10,7 @@ from app.platform.audit.exceptions import AuditRecordError
 
 class AuditEngineTestCase(unittest.TestCase):
     def setUp(self) -> None:
-        self.engine = AuditEngine()
+        self.engine = AuditEngine(SQLiteAuditRepository())
 
     def test_record_creation(self) -> None:
         record = self.engine.record_event(
@@ -23,7 +24,7 @@ class AuditEngineTestCase(unittest.TestCase):
         )
         self.assertIsNotNone(record)
         self.assertEqual(record.audit_id[:4], "aud_")
-        self.assertEqual(len(self.engine._records), 1)
+        self.assertEqual(len(self.engine.query()), 1)
 
     def test_integrity_verification(self) -> None:
         record = self.engine.record_event(
@@ -70,8 +71,12 @@ class AuditEngineTestCase(unittest.TestCase):
             correlation_id="corr_2",
         )
         
-        # Manually alter the timestamp of the first record for querying
-        self.engine._records[0] = replace(self.engine._records[0], timestamp=t1)
+        # Manually alter the timestamp of the first record in SQLite for querying
+        self.engine._repository._conn.execute(
+            "UPDATE audit_records SET timestamp = ? WHERE audit_id = ?",
+            (t1.isoformat(), r1.audit_id)
+        )
+        self.engine._repository._conn.commit()
         
         # Query by project
         proj_results = self.engine.query(project_id="proj_2")

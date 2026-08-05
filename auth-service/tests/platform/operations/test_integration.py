@@ -1,3 +1,4 @@
+from app.storage.providers.sqlite import SQLiteProjectRepository, SQLiteAuditRepository, SQLiteOperationHistoryRepository
 import sys
 import types
 from dataclasses import dataclass
@@ -57,7 +58,7 @@ class MockEngineResult:
 
 class PlatformIntegrationTestCase(unittest.TestCase):
     def setUp(self) -> None:
-        self.registry = ProjectRegistryManager()
+        self.registry = ProjectRegistryManager(SQLiteProjectRepository())
         self.project = build_project()
         self.registry.register(self.project)
         
@@ -70,7 +71,7 @@ class PlatformIntegrationTestCase(unittest.TestCase):
         self.restore = RestoreEngine(self.registry, self.lifecycle, self.validation)
         self.health = HealthEngine(self.registry, self.lifecycle)
         self.events = EventEngine()
-        self.audit = AuditEngine()
+        self.audit = AuditEngine(SQLiteAuditRepository())
         
         self.coordinator = PlatformOperationsCoordinator(
             lifecycle_manager=self.lifecycle,
@@ -81,6 +82,7 @@ class PlatformIntegrationTestCase(unittest.TestCase):
             health_engine=self.health,
             event_engine=self.events,
             audit_engine=self.audit,
+            history_repository=SQLiteOperationHistoryRepository(),
         )
 
     def test_end_to_end_deploy(self) -> None:

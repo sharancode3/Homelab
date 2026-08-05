@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  platform-orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: auth-service-platform:latest
+    container_name: auth_service_platform
+    ports:
+      - "8000:8000"
+    environment:
+      - PLATFORM_ENVIRONMENT=production
+      - PLATFORM_DEBUG=false
+      - PLATFORM_API_HOST=0.0.0.0
+      - PLATFORM_API_PORT=8000
+      - PLATFORM_STORAGE_PATH=/var/lib/auth-service/data
+      - PLATFORM_SECRET_KEY=${PLATFORM_SECRET_KEY:-change-me-in-production}
+    volumes:
+      - platform_data:/var/lib/auth-service/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health/platform"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  platform_data:

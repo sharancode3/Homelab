@@ -15,6 +15,9 @@ from app.platform.operations.enums import OperationType
 from app.platform.validation.engine import ValidationEngine
 from app.project_registry import ProjectRegistryEntry, ProjectStatus, ProjectType
 from app.project_registry_manager import ProjectRegistryManager
+from app.observability.tracing import trace_scope
+from app.observability.models import TraceContext
+from app.security.hardening.validation import InputValidator
 
 
 class APIServiceLayer:
@@ -35,6 +38,7 @@ class APIServiceLayer:
         self._coordinator = coordinator
 
     def register_project(self, req: ProjectRegisterRequest) -> ProjectRegisterResponse:
+        InputValidator.validate_payload(req.model_dump() if hasattr(req, "model_dump") else req.dict())
         try:
             ptype = ProjectType(req.project_type)
         except ValueError:
@@ -67,12 +71,14 @@ class APIServiceLayer:
         )
 
     def deploy_project(self, project_id: str, req: DeployRequest) -> OperationResponse:
-        res = self._coordinator.execute_operation(
-            project_id=project_id,
-            operation_type=OperationType.DEPLOY,
-            requested_by=req.requested_by,
-            correlation_id=req.correlation_id,
-        )
+        InputValidator.validate_payload(req.model_dump() if hasattr(req, "model_dump") else req.dict())
+        with trace_scope(TraceContext(correlation_id=req.correlation_id or "auto")):
+            res = self._coordinator.execute_operation(
+                project_id=project_id,
+                operation_type=OperationType.DEPLOY,
+                requested_by=req.requested_by,
+                correlation_id=req.correlation_id,
+            )
         return OperationResponse(
             operation_id=res.operation_id,
             status=res.status.value,
@@ -81,13 +87,15 @@ class APIServiceLayer:
         )
 
     def backup_project(self, project_id: str, req: BackupRequest) -> OperationResponse:
-        res = self._coordinator.execute_operation(
-            project_id=project_id,
-            operation_type=OperationType.BACKUP,
-            requested_by=req.requested_by,
-            correlation_id=req.correlation_id,
-            backup_type=req.backup_type,
-        )
+        InputValidator.validate_payload(req.model_dump() if hasattr(req, "model_dump") else req.dict())
+        with trace_scope(TraceContext(correlation_id=req.correlation_id or "auto")):
+            res = self._coordinator.execute_operation(
+                project_id=project_id,
+                operation_type=OperationType.BACKUP,
+                requested_by=req.requested_by,
+                correlation_id=req.correlation_id,
+                backup_type=req.backup_type,
+            )
         return OperationResponse(
             operation_id=res.operation_id,
             status=res.status.value,
@@ -96,13 +104,15 @@ class APIServiceLayer:
         )
 
     def restore_project(self, project_id: str, req: RestoreRequest) -> OperationResponse:
-        res = self._coordinator.execute_operation(
-            project_id=project_id,
-            operation_type=OperationType.RESTORE,
-            requested_by=req.requested_by,
-            correlation_id=req.correlation_id,
-            backup_id=req.backup_id,
-        )
+        InputValidator.validate_payload(req.model_dump() if hasattr(req, "model_dump") else req.dict())
+        with trace_scope(TraceContext(correlation_id=req.correlation_id or "auto")):
+            res = self._coordinator.execute_operation(
+                project_id=project_id,
+                operation_type=OperationType.RESTORE,
+                requested_by=req.requested_by,
+                correlation_id=req.correlation_id,
+                backup_id=req.backup_id,
+            )
         return OperationResponse(
             operation_id=res.operation_id,
             status=res.status.value,

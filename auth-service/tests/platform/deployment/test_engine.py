@@ -1,4 +1,5 @@
 from __future__ import annotations
+from app.storage.providers.sqlite import SQLiteProjectRepository, SQLiteAuditRepository, SQLiteOperationHistoryRepository
 
 import sys
 import types
@@ -64,7 +65,7 @@ def build_project() -> ProjectRegistryEntry:
 
 class DeploymentEngineTestCase(unittest.TestCase):
     def setUp(self) -> None:
-        self.registry = ProjectRegistryManager()
+        self.registry = ProjectRegistryManager(SQLiteProjectRepository())
         self.project = build_project()
         self.registry.register(self.project)
         self.lifecycle = LifecycleManager(self.registry)
@@ -100,7 +101,7 @@ class DeploymentEngineTestCase(unittest.TestCase):
         self.assertIn(DeploymentStage.VERIFICATION, result.executed_stages)
 
     def test_invalid_deployment_request(self) -> None:
-        invalid_registry = ProjectRegistryManager()
+        invalid_registry = ProjectRegistryManager(SQLiteProjectRepository())
         project = build_project()
         invalid_registry.register(project)
         lifecycle = LifecycleManager(invalid_registry)
