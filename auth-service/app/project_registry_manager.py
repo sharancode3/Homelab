@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from typing import final
 
 from app.project_registry import ProjectRegistryEntry
@@ -14,7 +15,10 @@ class DuplicateProjectSlugError(ValueError):
 
 
 class ProjectRegistryManager:
-    """In-memory registry for platform projects."""
+    """In-memory registry for platform projects.
+
+    The projects property and iteration both preserve registration order.
+    """
 
     def __init__(self) -> None:
         self._projects_by_id: dict[str, ProjectRegistryEntry] = {}
@@ -68,6 +72,6 @@ class ProjectRegistryManager:
         """
         return project_id in self._projects_by_id
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[ProjectRegistryEntry]:
         """Iterate over registered projects in registration order."""
         return iter(self._projects_by_id.values())
