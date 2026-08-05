@@ -111,15 +111,15 @@ class PlatformOperationsCoordinator:
                     if not res.success:
                         failures.append(res.message)
                 elif operation_type == OperationType.STOP:
-                    self._lifecycle_manager.transition(project_id, LifecycleOperation.STOP)
+                    self._lifecycle_manager.stop(project_id)
                     completed_steps.append("stop")
                 elif operation_type == OperationType.RESTART:
-                    self._lifecycle_manager.transition(project_id, LifecycleOperation.STOP)
+                    self._lifecycle_manager.stop(project_id)
                     completed_steps.append("stop")
-                    self._lifecycle_manager.transition(project_id, LifecycleOperation.START)
+                    self._lifecycle_manager.start(project_id)
                     completed_steps.append("start")
                 elif operation_type == OperationType.ARCHIVE:
-                    self._lifecycle_manager.transition(project_id, LifecycleOperation.ARCHIVE)
+                    self._lifecycle_manager.archive(project_id)
                     completed_steps.append("archive")
                 else:
                     failures.append(f"Unknown operation {operation_type}")
