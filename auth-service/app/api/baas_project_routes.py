@@ -1,7 +1,7 @@
 from app.api.rate_limiter import rate_limit_ip, rate_limit_api_key
 from fastapi import APIRouter, Depends, status
 from app.api.baas_models import BaaSProjectCreateRequest, BaaSProjectResponse
-from app.api.models import DeployRequest, BackupRequest, RestoreRequest, OperationResponse, HealthResponse, ValidateResponse
+from app.api.models import DeployRequest, BackupRequest, RestoreRequest, OperationResponse, HealthResponse, ValidateResponse, StopRequest, RestartRequest, LogsResponse
 from app.api.dependencies import get_current_user, get_baas_project_service, require_viewer, require_developer, require_admin, require_owner
 from app.api.baas_service import BaaSProjectServiceLayer
 from app.identity.models import DeveloperUser
@@ -83,6 +83,36 @@ def get_health(
     _rate_limit: None = Depends(rate_limit_ip),
 ):
     return service.get_health(project_id)
+
+@router.post("/{project_id}/stop", response_model=OperationResponse)
+def stop_project(
+    project_id: str,
+    req: StopRequest,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_developer),
+    _rate_limit: None = Depends(rate_limit_ip),
+):
+    return service.stop_project(project_id, req)
+
+@router.post("/{project_id}/restart", response_model=OperationResponse)
+def restart_project(
+    project_id: str,
+    req: RestartRequest,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_developer),
+    _rate_limit: None = Depends(rate_limit_ip),
+):
+    return service.restart_project(project_id, req)
+
+@router.get("/{project_id}/logs", response_model=LogsResponse)
+def get_project_logs(
+    project_id: str,
+    limit: int = 100,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_viewer),
+    _rate_limit: None = Depends(rate_limit_ip),
+):
+    return service.get_project_logs(project_id, limit)
 
 from app.api.baas_models import ProjectMemberResponse, AddMemberRequest, UpdateMemberRoleRequest, ApiKeyCreateRequest, ApiKeyResponse, ApiKeyListResponse
 from app.api.dependencies import verify_project_api_key

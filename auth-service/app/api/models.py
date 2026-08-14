@@ -52,3 +52,24 @@ class HealthResponse(BaseModel):
     status: str
     success: bool
     message: str
+
+
+class StopRequest(BaseOperationRequest):
+    pass
+
+
+class RestartRequest(BaseOperationRequest):
+    pass
+
+
+class LogEventResponse(BaseModel):
+    audit_id: str
+    timestamp: str
+    event_type: str
+    severity: str
+    message: str
+
+
+class LogsResponse(BaseModel):
+    project_id: str
+    logs: list[LogEventResponse] = Field(default_factory=list)

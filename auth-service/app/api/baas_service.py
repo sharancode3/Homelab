@@ -1,10 +1,20 @@
 import secrets
 import random
-import secrets
 import hashlib
 from fastapi import HTTPException
 from app.api.baas_models import BaaSProjectCreateRequest, BaaSProjectResponse
-from app.api.models import ProjectRegisterRequest, DeployRequest, BackupRequest, RestoreRequest, OperationResponse, HealthResponse, ValidateResponse
+from app.api.models import (
+    ProjectRegisterRequest,
+    DeployRequest,
+    BackupRequest,
+    RestoreRequest,
+    StopRequest,
+    RestartRequest,
+    LogsResponse,
+    OperationResponse,
+    HealthResponse,
+    ValidateResponse
+)
 from app.api.service import APIServiceLayer
 from app.storage.interfaces import ProjectAuthorizationRepository, UserRepository
 from app.project_registry_manager import ProjectRegistryManager
@@ -102,6 +112,15 @@ class BaaSProjectServiceLayer:
 
     def get_health(self, project_id: str) -> HealthResponse:
         return self._internal.get_health(project_id)
+
+    def stop_project(self, project_id: str, req: StopRequest) -> OperationResponse:
+        return self._internal.stop_project(project_id, req)
+
+    def restart_project(self, project_id: str, req: RestartRequest) -> OperationResponse:
+        return self._internal.restart_project(project_id, req)
+
+    def get_project_logs(self, project_id: str, limit: int = 100) -> LogsResponse:
+        return self._internal.get_project_logs(project_id, limit)
 
     # Membership Management
     def list_members(self, project_id: str) -> list[dict]:

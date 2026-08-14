@@ -6,9 +6,14 @@ from app.api.models import (
     ProjectRegisterRequest,
     ProjectRegisterResponse,
     RestoreRequest,
+    StopRequest,
+    RestartRequest,
+    LogsResponse,
+    LogEventResponse,
     ValidateResponse,
 )
 from app.platform.health.engine import HealthEngine
+from app.platform.audit.engine import AuditEngine
 from app.platform.lifecycle.manager import LifecycleManager
 from app.platform.operations.coordinator import PlatformOperationsCoordinator
 from app.platform.operations.enums import OperationType
@@ -30,12 +35,14 @@ class APIServiceLayer:
         validation: ValidationEngine,
         health: HealthEngine,
         coordinator: PlatformOperationsCoordinator,
+        audit_engine: AuditEngine = None,
     ) -> None:
         self._registry = registry
         self._lifecycle = lifecycle
         self._validation = validation
         self._health = health
         self._coordinator = coordinator
+        self._audit_engine = audit_engine
 
     def register_project(self, req: ProjectRegisterRequest) -> ProjectRegisterResponse:
         InputValidator.validate_payload(req.model_dump() if hasattr(req, "model_dump") else req.dict())
@@ -53,7 +60,7 @@ class APIServiceLayer:
             project_version=req.project_version,
         )
         self._registry.register(entry)
-        
+
         from app.platform.lifecycle.exceptions import LifecycleConflictError
         try:
             self._lifecycle.register(req.project_id)
@@ -141,3 +148,55 @@ class APIServiceLayer:
             success=res.success,
             message=res.message,
         )
+
+    def stop_project(self, project_id: str, req: StopRequest) -> OperationResponse:
+        InputValidator.validate_payload(req.model_dump() if hasattr(req, "model_dump") else req.dict())
+        with trace_scope(TraceContext(correlation_id=req.correlation_id or "auto")):
+            res = self._coordinator.execute_operation(
+                project_id=project_id,
+                operation_type=OperationType.STOP,
+                requested_by=req.requested_by,
+                correlation_id=req.correlation_id,
+            )
+        return OperationResponse(
+            operation_id=res.operation_id,
+            status=res.status.value,
+            completed_steps=list(res.completed_steps),
+            failures=list(res.failures),
+        )
+
+    def restart_project(self, project_id: str, req: RestartRequest) -> OperationResponse:
+        InputValidator.validate_payload(req.model_dump() if hasattr(req, "model_dump") else req.dict())
+        with trace_scope(TraceContext(correlation_id=req.correlation_id or "auto")):
+            res = self._coordinator.execute_operation(
+                project_id=project_id,
+                operation_type=OperationType.RESTART,
+                requested_by=req.requested_by,
+                correlation_id=req.correlation_id,
+            )
+        return OperationResponse(
+            operation_id=res.operation_id,
+            status=res.status.value,
+            completed_steps=list(res.completed_steps),
+            failures=list(res.failures),
+        )
+
+    def get_project_logs(self, project_id: str, limit: int = 100) -> LogsResponse:
+        if not self._audit_engine:
+            return LogsResponse(project_id=project_id, logs=[])
+
+        records = self._audit_engine.query(project_id=project_id)
+        # Sort by timestamp descending and apply limit
+        records = sorted(records, key=lambda x: x.timestamp, reverse=True)[:limit]
+
+        logs = []
+        for r in records:
+            logs.append(LogEventResponse(
+                audit_id=r.audit_id,
+                timestamp=r.timestamp.isoformat(),
+                event_type=r.event_type,
+                severity=r.severity.value,
+                message=r.summary,
+            ))
+
+        return LogsResponse(project_id=project_id, logs=logs)

@@ -288,6 +288,27 @@ def run_smoke_test():
     if delete_res.status_code != 204:
         raise AssertionError(f"Expected 204 on delete, got {delete_res.status_code}")
 
+    print("27. Testing Deployment Integration (Deploy, Stop, Restart, Health, Logs)...")
+    deploy_res = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/deploy", headers=headers_a, json={"requested_by": "smoke_test"})
+    if deploy_res.status_code != 200:
+        raise AssertionError(f"Expected 200 on deploy, got {deploy_res.status_code}")
+
+    health_res = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/health", headers=headers_a)
+    if health_res.status_code != 200:
+        raise AssertionError(f"Expected 200 on health, got {health_res.status_code}")
+
+    stop_res = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/stop", headers=headers_a, json={"requested_by": "smoke_test"})
+    if stop_res.status_code != 200:
+        raise AssertionError(f"Expected 200 on stop, got {stop_res.status_code}")
+
+    restart_res = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/restart", headers=headers_a, json={"requested_by": "smoke_test"})
+    if restart_res.status_code != 200:
+        raise AssertionError(f"Expected 200 on restart, got {restart_res.status_code}")
+
+    logs_res = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/logs", headers=headers_a)
+    if logs_res.status_code != 200:
+        raise AssertionError(f"Expected 200 on logs, got {logs_res.status_code}")
+
     print("✅ All smoke-test steps passed successfully!")
 
 if __name__ == "__main__":
