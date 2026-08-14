@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from app.api.baas_models import BaaSProjectCreateRequest, BaaSProjectResponse
 from app.api.models import DeployRequest, BackupRequest, RestoreRequest, OperationResponse, HealthResponse, ValidateResponse
-from app.api.dependencies import get_current_user, get_baas_project_service, verify_project_access
+from app.api.dependencies import get_current_user, get_baas_project_service, require_viewer, require_developer, require_admin, require_owner
 from app.api.baas_service import BaaSProjectServiceLayer
 from app.identity.models import DeveloperUser
 
@@ -27,8 +27,8 @@ def get_project(
     project_id: str,
     user: DeveloperUser = Depends(get_current_user),
     service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
-    # verify_project_access ensures the user owns this project before proceeding
-    _ = Depends(verify_project_access),
+    # require_viewer ensures the user has at least read access
+    role: str = Depends(require_viewer),
 ):
     return service.get_project(project_id)
 
@@ -37,7 +37,7 @@ def deploy_project(
     project_id: str,
     req: DeployRequest,
     service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
-    _ = Depends(verify_project_access),
+    role: str = Depends(require_developer),
 ):
     return service.deploy_project(project_id, req)
 
@@ -46,7 +46,7 @@ def backup_project(
     project_id: str,
     req: BackupRequest,
     service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
-    _ = Depends(verify_project_access),
+    role: str = Depends(require_admin),
 ):
     return service.backup_project(project_id, req)
 
@@ -55,7 +55,7 @@ def restore_project(
     project_id: str,
     req: RestoreRequest,
     service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
-    _ = Depends(verify_project_access),
+    role: str = Depends(require_admin),
 ):
     return service.restore_project(project_id, req)
 
@@ -63,7 +63,7 @@ def restore_project(
 def validate_project(
     project_id: str,
     service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
-    _ = Depends(verify_project_access),
+    role: str = Depends(require_developer),
 ):
     return service.validate_project(project_id)
 
@@ -71,6 +71,44 @@ def validate_project(
 def get_health(
     project_id: str,
     service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
-    _ = Depends(verify_project_access),
+    role: str = Depends(require_viewer),
 ):
     return service.get_health(project_id)
+
+from app.api.baas_models import ProjectMemberResponse, AddMemberRequest, UpdateMemberRoleRequest
+
+@router.get("/{project_id}/members", response_model=list[ProjectMemberResponse])
+def list_members(
+    project_id: str,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_viewer),
+):
+    return service.list_members(project_id)
+
+@router.post("/{project_id}/members", response_model=ProjectMemberResponse)
+def add_member(
+    project_id: str,
+    req: AddMemberRequest,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_admin),
+):
+    return service.add_member(project_id, req.email, req.role.value, role)
+
+@router.put("/{project_id}/members/{target_user_id}", response_model=ProjectMemberResponse)
+def update_member_role(
+    project_id: str,
+    target_user_id: str,
+    req: UpdateMemberRoleRequest,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_admin),
+):
+    return service.update_member_role(project_id, target_user_id, req.role.value, role)
+
+@router.delete("/{project_id}/members/{target_user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_member(
+    project_id: str,
+    target_user_id: str,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_admin),
+):
+    service.remove_member(project_id, target_user_id, role)

@@ -54,6 +54,30 @@ def get_authz_repo():
 def get_baas_project_service():
     raise NotImplementedError("Dependency should be overridden in app startup.")
 
+class RoleChecker:
+    def __init__(self, allowed_roles: list[str]):
+        self.allowed_roles = allowed_roles
+
+    def __call__(
+        self,
+        project_id: str,
+        user: DeveloperUser = Depends(get_current_user),
+        authz_repo = Depends(get_authz_repo)
+    ) -> str:
+        role = authz_repo.get_role(project_id, user.user_id)
+        if not role or role not in self.allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have sufficient permissions for this project."
+            )
+        return role
+
+require_viewer = RoleChecker(["owner", "admin", "developer", "viewer"])
+require_developer = RoleChecker(["owner", "admin", "developer"])
+require_admin = RoleChecker(["owner", "admin"])
+require_owner = RoleChecker(["owner"])
+
+# Keep this for backwards compatibility if needed, but it checks existence
 def verify_project_access(
     project_id: str,
     user: DeveloperUser = Depends(get_current_user),

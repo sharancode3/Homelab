@@ -1,4 +1,11 @@
+from enum import Enum
 from pydantic import BaseModel, Field
+
+class ProjectRole(str, Enum):
+    owner = "owner"
+    admin = "admin"
+    developer = "developer"
+    viewer = "viewer"
 
 class BaaSProjectCreateRequest(BaseModel):
     project_name: str = Field(min_length=1, max_length=100)
@@ -13,3 +20,15 @@ class BaaSProjectResponse(BaseModel):
     project_type: str
     status: str
     project_version: str | None = None
+
+class ProjectMemberResponse(BaseModel):
+    user_id: str
+    email: str
+    role: ProjectRole
+
+class AddMemberRequest(BaseModel):
+    email: str
+    role: ProjectRole
+
+class UpdateMemberRoleRequest(BaseModel):
+    role: ProjectRole

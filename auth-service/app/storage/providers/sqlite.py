@@ -390,3 +390,38 @@ class SQLiteProjectAuthorizationRepository(ProjectAuthorizationRepository):
             (project_id, user_id)
         ).fetchone()
         return row is not None
+
+    def get_role(self, project_id: str, user_id: str) -> str | None:
+        row = self._conn.execute(
+            "SELECT role FROM project_members WHERE project_id = ? AND user_id = ?",
+            (project_id, user_id)
+        ).fetchone()
+        return row["role"] if row else None
+
+    def get_project_members(self, project_id: str) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT user_id, role FROM project_members WHERE project_id = ?",
+            (project_id,)
+        ).fetchall()
+        return [{"user_id": row["user_id"], "role": row["role"]} for row in rows]
+
+    def update_member_role(self, project_id: str, user_id: str, role: str) -> None:
+        self._conn.execute(
+            "UPDATE project_members SET role = ? WHERE project_id = ? AND user_id = ?",
+            (role, project_id, user_id)
+        )
+        self._conn.commit()
+
+    def remove_member(self, project_id: str, user_id: str) -> None:
+        self._conn.execute(
+            "DELETE FROM project_members WHERE project_id = ? AND user_id = ?",
+            (project_id, user_id)
+        )
+        self._conn.commit()
+
+    def count_owners(self, project_id: str) -> int:
+        row = self._conn.execute(
+            "SELECT COUNT(*) as c FROM project_members WHERE project_id = ? AND role = 'owner'",
+            (project_id,)
+        ).fetchone()
+        return row["c"] if row else 0

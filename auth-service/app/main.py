@@ -105,7 +105,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     baas_service = BaaSProjectServiceLayer(
         internal_service=api_service,
         authz_repo=authz_repo,
-        registry=registry_manager
+        registry=registry_manager,
+        user_repo=user_repo
     )
 
     app.dependency_overrides[get_api_service] = lambda: api_service

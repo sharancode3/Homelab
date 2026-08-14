@@ -32,6 +32,21 @@ class ProjectAuthorizationRepository(Protocol):
     def check_access(self, project_id: str, user_id: str) -> bool:
         ...
 
+    def get_role(self, project_id: str, user_id: str) -> str | None:
+        ...
+
+    def get_project_members(self, project_id: str) -> list[dict]:
+        ...
+
+    def update_member_role(self, project_id: str, user_id: str, role: str) -> None:
+        ...
+
+    def remove_member(self, project_id: str, user_id: str) -> None:
+        ...
+
+    def count_owners(self, project_id: str) -> int:
+        ...
+
 
 class AuditRepository(Protocol):
     def append(self, record: AuditRecord) -> None:
