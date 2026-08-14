@@ -10,15 +10,19 @@ def run_smoke_test():
     print("1. Registering developers...")
     dev_a = {"username": f"deva_{int(time.time())}", "email": f"deva_{int(time.time())}@test.com", "password": "pass"}
     dev_b = {"username": f"devb_{int(time.time())}", "email": f"devb_{int(time.time())}@test.com", "password": "pass"}
+    dev_c = {"username": f"devc_{int(time.time())}", "email": f"devc_{int(time.time())}@test.com", "password": "pass"}
 
     httpx.post(f"{BASE_URL}/auth/register", json=dev_a)
     httpx.post(f"{BASE_URL}/auth/register", json=dev_b)
+    httpx.post(f"{BASE_URL}/auth/register", json=dev_c)
 
     token_a = httpx.post(f"{BASE_URL}/auth/login", json={"email": dev_a["email"], "password": dev_a["password"]}).json()["access_token"]
     token_b = httpx.post(f"{BASE_URL}/auth/login", json={"email": dev_b["email"], "password": dev_b["password"]}).json()["access_token"]
+    token_c = httpx.post(f"{BASE_URL}/auth/login", json={"email": dev_c["email"], "password": dev_c["password"]}).json()["access_token"]
 
     headers_a = {"Authorization": f"Bearer {token_a}"}
     headers_b = {"Authorization": f"Bearer {token_b}"}
+    headers_c = {"Authorization": f"Bearer {token_c}"}  # No access to any project
 
     user_a_id = httpx.get(f"{BASE_URL}/auth/me", headers=headers_a).json()["user_id"]
     user_b_id = httpx.get(f"{BASE_URL}/auth/me", headers=headers_b).json()["user_id"]
@@ -308,6 +312,62 @@ def run_smoke_test():
     logs_res = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/logs", headers=headers_a)
     if logs_res.status_code != 200:
         raise AssertionError(f"Expected 200 on logs, got {logs_res.status_code}")
+
+    print("✅ All smoke-test steps passed successfully!")
+
+    print("28. Testing Monitoring Integration (Status, History, Metrics, Platform)...")
+
+    # 28a. GET /status — must return 200 with simulated: true
+    status_res = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/status", headers=headers_a)
+    if status_res.status_code != 200:
+        raise AssertionError(f"Expected 200 on /status, got {status_res.status_code}: {status_res.text}")
+    status_data = status_res.json()
+    if not status_data.get("simulated"):
+        raise AssertionError(f"/status must include simulated=true, got: {status_data}")
+
+    # 28b. GET /history — must return 200 and list operations performed earlier
+    hist_res = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/history", headers=headers_a)
+    if hist_res.status_code != 200:
+        raise AssertionError(f"Expected 200 on /history, got {hist_res.status_code}: {hist_res.text}")
+    hist_data = hist_res.json()
+    if hist_data.get("total_returned", 0) == 0:
+        raise AssertionError(f"/history must contain at least 1 operation (deploy, stop, restart were performed): {hist_data}")
+
+    # 28c. GET /metrics — must return 200 with since_restart: true
+    metrics_res = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/metrics", headers=headers_a)
+    if metrics_res.status_code != 200:
+        raise AssertionError(f"Expected 200 on /metrics, got {metrics_res.status_code}: {metrics_res.text}")
+    metrics_data = metrics_res.json()
+    if not metrics_data.get("since_restart"):
+        raise AssertionError(f"/metrics must include since_restart=true, got: {metrics_data}")
+
+    # 28d. IDOR: Dev E (no project membership) must NOT be able to read Project A history
+    dev_e = {"username": f"deve_{int(time.time())}", "email": f"deve_{int(time.time())}@test.com", "password": "pass"}
+    httpx.post(f"{BASE_URL}/auth/register", json=dev_e)
+    token_e = httpx.post(f"{BASE_URL}/auth/login", json={"email": dev_e["email"], "password": dev_e["password"]}).json()["access_token"]
+    headers_e = {"Authorization": f"Bearer {token_e}"}
+
+    idor_res = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/history", headers=headers_e)
+    if idor_res.status_code != 403:
+        raise AssertionError(f"Expected 403 (IDOR protection) on cross-project /history, got {idor_res.status_code}")
+
+    # 28e. GET /platform/metrics with internal token — must return 200 with cpu_percent
+    platform_res = httpx.get(
+        f"{BASE_URL}/projects/platform/metrics",
+        headers={"X-Internal-Token": INTERNAL_TOKEN},
+    )
+    if platform_res.status_code != 200:
+        raise AssertionError(f"Expected 200 on /platform/metrics, got {platform_res.status_code}: {platform_res.text}")
+    platform_data = platform_res.json()
+    if "cpu_percent" not in platform_data:
+        raise AssertionError(f"/platform/metrics must include cpu_percent, got: {platform_data}")
+    if platform_data["cpu_percent"] < 0 or platform_data["cpu_percent"] > 100:
+        raise AssertionError(f"cpu_percent must be 0-100, got: {platform_data['cpu_percent']}")
+
+    # 28f. GET /platform/metrics with Developer JWT — must be rejected (403)
+    platform_deny_res = httpx.get(f"{BASE_URL}/projects/platform/metrics", headers=headers_a)
+    if platform_deny_res.status_code != 403:
+        raise AssertionError(f"Expected 403 when Developer JWT used on /platform/metrics, got {platform_deny_res.status_code}")
 
     print("✅ All smoke-test steps passed successfully!")
 

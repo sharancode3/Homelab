@@ -1,7 +1,11 @@
 from app.api.rate_limiter import rate_limit_ip, rate_limit_api_key
 from fastapi import APIRouter, Depends, status
 from app.api.baas_models import BaaSProjectCreateRequest, BaaSProjectResponse
-from app.api.models import DeployRequest, BackupRequest, RestoreRequest, OperationResponse, HealthResponse, ValidateResponse, StopRequest, RestartRequest, LogsResponse
+from app.api.models import (
+    DeployRequest, BackupRequest, RestoreRequest, OperationResponse,
+    HealthResponse, ValidateResponse, StopRequest, RestartRequest, LogsResponse,
+    ProjectStatusResponse, OperationHistoryResponse, ProjectMetricsResponse,
+)
 from app.api.dependencies import get_current_user, get_baas_project_service, require_viewer, require_developer, require_admin, require_owner
 from app.api.baas_service import BaaSProjectServiceLayer
 from app.identity.models import DeveloperUser
@@ -308,3 +312,41 @@ def delete_table(
     _rate_limit: None = Depends(rate_limit_ip),
 ):
     service.delete_table(project_id, table_name)
+
+
+# ─── Phase 14.4 Monitoring endpoints ──────────────────────────────────────────
+
+@router.get("/{project_id}/status", response_model=ProjectStatusResponse)
+def get_project_status(
+    project_id: str,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_viewer),
+    _rate_limit: None = Depends(rate_limit_ip),
+):
+    """Return the current lifecycle and deployment status for the project.
+    Deployment handle tracking is in-process only; status is marked simulated."""
+    return service.get_project_status(project_id)
+
+
+@router.get("/{project_id}/history", response_model=OperationHistoryResponse)
+def get_project_history(
+    project_id: str,
+    limit: int = 100,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_viewer),
+    _rate_limit: None = Depends(rate_limit_ip),
+):
+    """Return paginated operation history for the project (newest first, max 500)."""
+    return service.get_project_history(project_id, limit=limit)
+
+
+@router.get("/{project_id}/metrics", response_model=ProjectMetricsResponse)
+def get_project_metrics(
+    project_id: str,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_developer),
+    _rate_limit: None = Depends(rate_limit_ip),
+):
+    """Return process-global operation counters since last restart.
+    Requires Developer role; Viewers are rejected."""
+    return service.get_project_metrics(project_id)

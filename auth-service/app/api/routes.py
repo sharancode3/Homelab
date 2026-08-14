@@ -8,6 +8,7 @@ from app.api.models import (
     DeployRequest,
     HealthResponse,
     OperationResponse,
+    PlatformMetricsResponse,
     ProjectRegisterRequest,
     ProjectRegisterResponse,
     RestoreRequest,
@@ -82,3 +83,16 @@ def get_health(
         return service.get_health(project_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/platform/metrics", response_model=PlatformMetricsResponse)
+def get_platform_metrics(
+    service: APIServiceLayer = Depends(get_api_service),
+) -> PlatformMetricsResponse:
+    """Return real host CPU/RAM/disk metrics and process-global operation counters.
+    Protected by the X-Internal-Token header (applied to the entire router).
+    Must NOT be exposed through the public BaaS router."""
+    try:
+        return service.get_platform_metrics()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

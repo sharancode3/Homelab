@@ -78,7 +78,12 @@ class OperationHistoryRepository(Protocol):
     def save_result(self, result: OperationResult, project_id: str | None = None) -> None:
         ...
 
-    def get_history(self, project_id: str | None = None) -> list[OperationResult]:
+    def get_history(
+        self,
+        project_id: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[OperationResult]:
         ...
 
 class UserRepository(Protocol):

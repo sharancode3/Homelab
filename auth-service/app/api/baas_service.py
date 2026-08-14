@@ -13,7 +13,10 @@ from app.api.models import (
     LogsResponse,
     OperationResponse,
     HealthResponse,
-    ValidateResponse
+    ValidateResponse,
+    ProjectStatusResponse,
+    OperationHistoryResponse,
+    ProjectMetricsResponse,
 )
 from app.api.service import APIServiceLayer
 from app.storage.interfaces import ProjectAuthorizationRepository, UserRepository
@@ -121,6 +124,15 @@ class BaaSProjectServiceLayer:
 
     def get_project_logs(self, project_id: str, limit: int = 100) -> LogsResponse:
         return self._internal.get_project_logs(project_id, limit)
+
+    def get_project_status(self, project_id: str) -> ProjectStatusResponse:
+        return self._internal.get_project_status(project_id)
+
+    def get_project_history(self, project_id: str, limit: int = 100) -> OperationHistoryResponse:
+        return self._internal.get_project_history(project_id, limit=min(limit, 500))
+
+    def get_project_metrics(self, project_id: str) -> ProjectMetricsResponse:
+        return self._internal.get_project_metrics(project_id)
 
     # Membership Management
     def list_members(self, project_id: str) -> list[dict]:

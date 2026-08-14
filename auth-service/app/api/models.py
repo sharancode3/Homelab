@@ -73,3 +73,49 @@ class LogEventResponse(BaseModel):
 class LogsResponse(BaseModel):
     project_id: str
     logs: list[LogEventResponse] = Field(default_factory=list)
+
+
+# ─── Phase 14.4 Monitoring Models ────────────────────────────────────────────
+
+class ProjectStatusResponse(BaseModel):
+    project_id: str
+    lifecycle_state: str          # e.g. "deployed", "stopped", "registered"
+    deployment_status: str        # e.g. "completed", "unknown"
+    simulated: bool = True        # True until real Docker runtime exists
+    message: str
+
+
+class OperationHistoryEntry(BaseModel):
+    operation_id: str
+    status: str
+    completed_steps: list[str] = Field(default_factory=list)
+    failures: list[str] = Field(default_factory=list)
+
+
+class OperationHistoryResponse(BaseModel):
+    project_id: str
+    total_returned: int
+    history: list[OperationHistoryEntry] = Field(default_factory=list)
+
+
+class ProjectMetricsResponse(BaseModel):
+    project_id: str
+    since_restart: bool = True    # Always True: counters are in-memory only
+    operation_success_count: int = 0
+    operation_failure_count: int = 0
+    deployment_failures: int = 0
+    backup_success_count: int = 0
+    avg_operation_duration_ms: float = 0.0
+
+
+class PlatformMetricsResponse(BaseModel):
+    cpu_percent: float
+    memory_total_mb: float
+    memory_available_mb: float
+    memory_used_percent: float
+    disk_total_mb: float
+    disk_used_mb: float
+    disk_used_percent: float
+    since_restart_counters: dict[str, int] = Field(default_factory=dict)
+    since_restart_avg_durations_ms: dict[str, float] = Field(default_factory=dict)
+    collected_at: str

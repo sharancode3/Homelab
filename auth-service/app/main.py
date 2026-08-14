@@ -66,7 +66,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 3. Engines
     audit_engine = AuditEngine(repository=audit_repo)
     event_engine = EventEngine()
-    health_engine = HealthEngine(registry=registry_manager, lifecycle_manager=lifecycle_manager)
+    health_engine = HealthEngine(
+        registry=registry_manager,
+        lifecycle_manager=lifecycle_manager,
+        tenant_db=None,            # wired below after tenant_factory is created
+        storage_path=config.storage_path,
+    )
     validation_engine = ValidationEngine(registry=registry_manager, lifecycle_manager=lifecycle_manager)
     backup_engine = BackupEngine(registry=registry_manager, lifecycle_manager=lifecycle_manager)
     restore_engine = RestoreEngine(registry=registry_manager, lifecycle_manager=lifecycle_manager, validation_engine=validation_engine)
@@ -101,7 +106,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         coordinator=coordinator,
         lifecycle=lifecycle_manager,
         validation=validation_engine,
-        health=health_engine
+        health=health_engine,
+        audit_engine=audit_engine,
+        history_repository=history_repo,
+        storage_path=str(config.storage_path),
     )
 
     # 8. Auth Service Layer
@@ -111,6 +119,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     authz_repo = SQLiteProjectAuthorizationRepository(db_path="data/authz.db")
     tenant_factory = SQLiteTenantConnectionFactory(storage_path="data")
     tenant_db = TenantDatabaseManager(factory=tenant_factory)
+    # Late-bind tenant_db into health_engine (created before tenant_factory above)
+    health_engine._tenant_db = tenant_db
     baas_service = BaaSProjectServiceLayer(
         internal_service=api_service,
         authz_repo=authz_repo,

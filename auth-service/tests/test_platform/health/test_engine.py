@@ -78,7 +78,7 @@ class HealthEngineTestCase(unittest.TestCase):
 
     def test_degraded_result(self) -> None:
         # Mock _collect_indicators to return a degraded indicator
-        def mock_collect_indicators(project_id: str) -> tuple[HealthIndicator, ...]:
+        def mock_collect_indicators(project_id: str, current_state) -> tuple[HealthIndicator, ...]:
             return (
                 HealthIndicator(
                     indicator_id="api_1",
@@ -90,15 +90,15 @@ class HealthEngineTestCase(unittest.TestCase):
                     checked_at=datetime.now(timezone.utc),
                 ),
             )
-        
+
         self.engine._collect_indicators = mock_collect_indicators  # type: ignore[method-assign]
         snapshot = self.engine.evaluate(self.project.project_id)
-        
+
         self.assertTrue(snapshot.success)
         self.assertEqual(snapshot.state, HealthState.DEGRADED)
 
     def test_unhealthy_result(self) -> None:
-        def mock_collect_indicators(project_id: str) -> tuple[HealthIndicator, ...]:
+        def mock_collect_indicators(project_id: str, current_state) -> tuple[HealthIndicator, ...]:
             return (
                 HealthIndicator(
                     indicator_id="api_1",
@@ -119,10 +119,10 @@ class HealthEngineTestCase(unittest.TestCase):
                     checked_at=datetime.now(timezone.utc),
                 ),
             )
-        
+
         self.engine._collect_indicators = mock_collect_indicators  # type: ignore[method-assign]
         snapshot = self.engine.evaluate(self.project.project_id)
-        
+
         self.assertTrue(snapshot.success)
         self.assertEqual(snapshot.state, HealthState.UNHEALTHY)
 
@@ -135,12 +135,12 @@ class HealthEngineTestCase(unittest.TestCase):
         self.assertIn("Unknown project", snapshot.message)
 
     def test_indicator_aggregation(self) -> None:
-        def mock_collect_indicators(project_id: str) -> tuple[HealthIndicator, ...]:
+        def mock_collect_indicators(project_id: str, current_state) -> tuple[HealthIndicator, ...]:
             return ()
-            
+
         self.engine._collect_indicators = mock_collect_indicators  # type: ignore[method-assign]
         snapshot = self.engine.evaluate(self.project.project_id)
-        
+
         self.assertTrue(snapshot.success)
         self.assertEqual(snapshot.state, HealthState.UNKNOWN)
 

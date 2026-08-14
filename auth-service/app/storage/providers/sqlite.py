@@ -248,13 +248,22 @@ class SQLiteOperationHistoryRepository(OperationHistoryRepository):
             self._conn.rollback()
             raise DuplicateRecordError(f"Operation {result.operation_id} already exists.")
 
-    def get_history(self, project_id: str | None = None) -> list[OperationResult]:
+    def get_history(
+        self,
+        project_id: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[OperationResult]:
+        # Enforce hard maximum to protect low-resource host
+        limit = min(limit, 500)
         query = "SELECT * FROM operation_history"
-        params = []
+        params: list = []
         if project_id is not None:
             query += " WHERE project_id = ?"
             params.append(project_id)
-
+        # Newest-first ordering
+        query += " ORDER BY rowid DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
         rows = self._conn.execute(query, params).fetchall()
         return [self._row_to_result(row) for row in rows]
 

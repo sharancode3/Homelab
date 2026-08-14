@@ -66,6 +66,7 @@ class RoleChecker:
         authz_repo = Depends(get_authz_repo)
     ) -> str:
         role = authz_repo.get_role(project_id, user.user_id)
+        print(f"RoleChecker DEBUG: project_id={project_id}, user_id={user.user_id}, role={role}, allowed={self.allowed_roles}")
         if not role or role not in self.allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

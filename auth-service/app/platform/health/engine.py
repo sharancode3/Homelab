@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 from typing import Sequence
 
@@ -8,7 +9,6 @@ from app.platform.health.exceptions import HealthException, HealthRequestError
 from app.platform.health.models import HealthIndicator, HealthSnapshot
 from app.platform.lifecycle import LifecycleManager
 from app.platform.lifecycle.enums import LifecycleState
-from app.project_registry import ProjectRegistryEntry
 from app.project_registry_manager import ProjectRegistryManager
 
 
@@ -19,9 +19,13 @@ class HealthEngine:
         self,
         registry: ProjectRegistryManager,
         lifecycle_manager: LifecycleManager,
+        tenant_db=None,
+        storage_path: str | None = None,
     ) -> None:
         self._registry = registry
         self._lifecycle_manager = lifecycle_manager
+        self._tenant_db = tenant_db
+        self._storage_path = storage_path
 
     def evaluate(self, project_id: str) -> HealthSnapshot:
         evaluated_at = datetime.now(timezone.utc)
@@ -39,9 +43,9 @@ class HealthEngine:
             if current_state is None:
                 raise HealthRequestError(f"Project has no lifecycle state: {project_id}")
 
-            # Collect health indicators (simulated)
-            indicators = self._collect_indicators(project_id)
-            
+            # Collect real health indicators
+            indicators = self._collect_indicators(project_id, current_state)
+
             # Aggregate health state
             aggregated_state = self._aggregate_state(indicators, current_state)
 
@@ -82,19 +86,139 @@ class HealthEngine:
 
         return None
 
-    def _collect_indicators(self, project_id: str) -> tuple[HealthIndicator, ...]:
-        # This is a simulation of health indicator collection.
-        # In a real system, this would call various internal APIs or metrics endpoints.
-        return (
-            HealthIndicator(
-                indicator_id="db_conn_1",
+    def _collect_indicators(
+        self, project_id: str, current_state: LifecycleState
+    ) -> tuple[HealthIndicator, ...]:
+        indicators: list[HealthIndicator] = []
+        now = datetime.now(timezone.utc)
+
+        # 1. Database connectivity indicator — real SQLite latency probe
+        db_indicator = self._check_database(project_id, now)
+        indicators.append(db_indicator)
+
+        # 2. Storage path indicator — check directory existence/writability
+        storage_indicator = self._check_storage(project_id, now)
+        indicators.append(storage_indicator)
+
+        # 3. Lifecycle state indicator
+        lifecycle_indicator = self._check_lifecycle(project_id, current_state, now)
+        indicators.append(lifecycle_indicator)
+
+        return tuple(indicators)
+
+    def _check_database(self, project_id: str, now: datetime) -> HealthIndicator:
+        """Real latency probe against the project's tenant SQLite database."""
+        if self._tenant_db is None:
+            return HealthIndicator(
+                indicator_id=f"db_{project_id}",
                 name="Database Connectivity",
                 category=HealthCategory.DATABASE,
-                state=HealthState.HEALTHY,
-                severity=HealthSeverity.INFO,
-                details={"latency_ms": 15},
-                checked_at=datetime.now(timezone.utc),
-            ),
+                state=HealthState.UNKNOWN,
+                severity=HealthSeverity.WARNING,
+                details={"reason": "tenant_db not configured"},
+                checked_at=now,
+            )
+
+        try:
+            start = time.perf_counter()
+            conn = self._tenant_db.get_connection(project_id)
+            conn.execute("SELECT 1").fetchone()
+            latency_ms = round((time.perf_counter() - start) * 1000, 2)
+
+            if latency_ms > 500:
+                state = HealthState.DEGRADED
+                severity = HealthSeverity.WARNING
+            else:
+                state = HealthState.HEALTHY
+                severity = HealthSeverity.INFO
+
+            return HealthIndicator(
+                indicator_id=f"db_{project_id}",
+                name="Database Connectivity",
+                category=HealthCategory.DATABASE,
+                state=state,
+                severity=severity,
+                details={"latency_ms": latency_ms},
+                checked_at=now,
+            )
+        except Exception as exc:
+            return HealthIndicator(
+                indicator_id=f"db_{project_id}",
+                name="Database Connectivity",
+                category=HealthCategory.DATABASE,
+                state=HealthState.UNHEALTHY,
+                severity=HealthSeverity.CRITICAL,
+                details={"error": str(exc)},
+                checked_at=now,
+            )
+
+    def _check_storage(self, project_id: str, now: datetime) -> HealthIndicator:
+        """Verify the project's storage directory exists and is writable."""
+        import os
+        if self._storage_path is None:
+            return HealthIndicator(
+                indicator_id=f"storage_{project_id}",
+                name="Storage Accessibility",
+                category=HealthCategory.INFRASTRUCTURE,
+                state=HealthState.UNKNOWN,
+                severity=HealthSeverity.WARNING,
+                details={"reason": "storage_path not configured"},
+                checked_at=now,
+            )
+
+        project_storage = os.path.join(str(self._storage_path), project_id)
+        exists = os.path.isdir(project_storage)
+        writable = os.access(project_storage, os.W_OK) if exists else False
+
+        if exists and writable:
+            state = HealthState.HEALTHY
+            severity = HealthSeverity.INFO
+            details: dict = {"path": project_storage, "writable": True}
+        elif exists and not writable:
+            state = HealthState.DEGRADED
+            severity = HealthSeverity.WARNING
+            details = {"path": project_storage, "writable": False}
+        else:
+            # Storage dir doesn't exist yet — not yet provisioned, not unhealthy
+            state = HealthState.HEALTHY
+            severity = HealthSeverity.INFO
+            details = {"path": project_storage, "provisioned": False}
+
+        return HealthIndicator(
+            indicator_id=f"storage_{project_id}",
+            name="Storage Accessibility",
+            category=HealthCategory.INFRASTRUCTURE,
+            state=state,
+            severity=severity,
+            details=details,
+            checked_at=now,
+        )
+
+    def _check_lifecycle(
+        self, project_id: str, current_state: LifecycleState, now: datetime
+    ) -> HealthIndicator:
+        """Surface the project's lifecycle state as a health indicator."""
+        unhealthy_states = {LifecycleState.FAILED}
+        degraded_states = {LifecycleState.STOPPED, LifecycleState.ARCHIVED}
+
+        if current_state in unhealthy_states:
+            state = HealthState.UNHEALTHY
+            severity = HealthSeverity.CRITICAL
+        elif current_state in degraded_states:
+            state = HealthState.DEGRADED
+            severity = HealthSeverity.WARNING
+        else:
+            state = HealthState.HEALTHY
+            severity = HealthSeverity.INFO
+
+        return HealthIndicator(
+            indicator_id=f"lifecycle_{project_id}",
+            name="Lifecycle State",
+            category=HealthCategory.SYSTEM,
+            state=state,
+            severity=severity,
+            details={"lifecycle_state": current_state.value},
+            checked_at=now,
         )
 
     def _aggregate_state(
