@@ -3,7 +3,7 @@ import time
 import os
 import shutil
 
-BASE_URL = "http://localhost:8016/api/v1"
+BASE_URL = "http://localhost:8003/api/v1"
 INTERNAL_TOKEN = "my-secret"
 
 def run_smoke_test():

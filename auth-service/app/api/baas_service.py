@@ -218,6 +218,10 @@ class BaaSProjectServiceLayer:
         if not self._tenant_db: return
         self._tenant_db.delete_table(project_id, table_name)
 
+    def add_column(self, project_id: str, table_name: str, column_name: str, column_type: str) -> None:
+        if not self._tenant_db: return
+        self._tenant_db.add_column(project_id, table_name, column_name, column_type)
+
     # Data CRUD (Data Plane)
     def insert_row(self, project_id: str, table_name: str, data: dict) -> str:
         if not self._tenant_db: return ""

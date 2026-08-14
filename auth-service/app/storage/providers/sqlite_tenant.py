@@ -141,6 +141,39 @@ class TenantDatabaseManager:
                     raise TenantDatabaseError(f"Table {table_name} does not exist")
                 raise
 
+    def add_column(self, project_id: str, table_name: str, column_name: str, column_type: str) -> None:
+        TenantDatabaseValidator.validate_identifier(table_name)
+        TenantDatabaseValidator.validate_identifier(column_name)
+        
+        valid_types = {"TEXT", "INTEGER", "REAL", "JSON"}
+        col_type_upper = column_type.upper()
+        if col_type_upper not in valid_types:
+            raise TenantDatabaseError(f"Unsupported data type: {column_type}")
+        
+        sqlite_type = "TEXT" if col_type_upper == "JSON" else col_type_upper
+        
+        with self.factory.connect(project_id) as conn:
+            # Check table existence
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+            if not cursor.fetchone():
+                raise TenantDatabaseError(f"Table {table_name} does not exist")
+                
+            # Check max columns
+            cursor = conn.execute(f'PRAGMA table_info("{table_name}")')
+            columns = cursor.fetchall()
+            if len(columns) >= self.MAX_COLUMNS:
+                raise TenantDatabaseError(f"Cannot exceed {self.MAX_COLUMNS} columns")
+            
+            # Check if column already exists
+            for col in columns:
+                if col["name"] == column_name:
+                    raise TenantDatabaseError(f"Column {column_name} already exists in table {table_name}")
+
+            try:
+                conn.execute(f'ALTER TABLE "{table_name}" ADD COLUMN "{column_name}" {sqlite_type}')
+            except sqlite3.Error as e:
+                raise TenantDatabaseError(f"Database error: {str(e)}")
+
     # ================== DATA PLANE (ROW CRUD) ==================
 
     def insert_row(self, project_id: str, table_name: str, data: Dict[str, Any]) -> str:

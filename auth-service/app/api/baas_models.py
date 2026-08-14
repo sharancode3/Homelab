@@ -55,6 +55,10 @@ class TableCreateRequest(BaseModel):
     name: str = Field(..., pattern=r'^[a-zA-Z_][a-zA-Z0-9_]{0,63}$')
     columns: dict[str, str]
 
+class AddColumnRequest(BaseModel):
+    name: str = Field(..., pattern=r'^[a-zA-Z_][a-zA-Z0-9_]{0,63}$')
+    type: str
+
 class TableResponse(BaseModel):
     name: str
 
