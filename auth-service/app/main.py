@@ -141,6 +141,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     storage_adapter = LocalStorageProvider(base_dir=config.storage_path)
     baas_storage_service = BaaSStorageService(storage_repo=baas_storage_repo, storage_adapter=storage_adapter)
 
+    # 12. Revocation Repository
+    from app.storage.providers.sqlite import SQLiteRevocationRepository
+    from app.api.dependencies import get_revocation_repo
+    revocation_repo = SQLiteRevocationRepository(db_path="data/revocations.db")
+
     app.dependency_overrides[get_api_service] = lambda: api_service
     app.dependency_overrides[get_auth_service] = lambda: auth_service
     app.dependency_overrides[get_user_repository] = lambda: user_repo
@@ -148,6 +153,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.dependency_overrides[get_baas_project_service] = lambda: baas_service
     app.dependency_overrides[get_baas_auth_service] = lambda: baas_auth_service
     app.dependency_overrides[get_storage_service] = lambda: baas_storage_service
+    app.dependency_overrides[get_revocation_repo] = lambda: revocation_repo
 
     yield
 
@@ -172,6 +178,16 @@ from fastapi.exception_handlers import http_exception_handler
 async def global_exception_handler(request: Request, exc: Exception):
     if isinstance(exc, HTTPException):
         return await http_exception_handler(request, exc)
+
+    import sqlite3
+    from app.services.email_service import EmailDeliveryException
+    if isinstance(exc, (sqlite3.OperationalError, OSError, EmailDeliveryException)):
+        logger.error("service_unavailable", f"Service unavailable error: {str(exc)}")
+        return JSONResponse(
+            status_code=503,
+            content={"error": "service_unavailable", "detail": "The service is temporarily unavailable. Please try again later."},
+        )
+
     logger.error("internal_error", f"Unhandled exception: {str(exc)}")
     return JSONResponse(
         status_code=500,

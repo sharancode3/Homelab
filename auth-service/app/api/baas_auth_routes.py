@@ -1,37 +1,44 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Header
 from app.api.baas_auth_models import (
-    EndUserRegisterRequest, EndUserLoginRequest, EndUserTokenResponse, 
+    EndUserRegisterRequest, EndUserLoginRequest, EndUserTokenResponse,
     EndUserRefreshRequest, EndUserAccessTokenResponse, EndUserResponse,
     EndUserPasswordResetRequest, EndUserPasswordResetConfirm, EndUserVerifyEmailRequest
 )
 from app.api.baas_auth_service import (
-    BaaSAuthService, BaaSUserAlreadyExistsException, InvalidBaaSCredentialsException, 
+    BaaSAuthService, BaaSUserAlreadyExistsException, InvalidBaaSCredentialsException,
     InvalidBaaSRefreshTokenException
 )
 
 router = APIRouter(prefix="/{project_id}/auth", tags=["BaaS End-User Auth"])
+
+from app.api.dependencies import get_revocation_repo
 
 def get_baas_auth_service():
     raise NotImplementedError("Dependency should be overridden in app startup.")
 
 def verify_end_user_token(
     project_id: str,
-    authorization: str = Header(..., description="Bearer token")
+    authorization: str = Header(..., description="Bearer token"),
+    revocation_repo = Depends(get_revocation_repo)
 ) -> str:
     # This is a dependency for endpoints that require an authenticated end-user.
     from app.auth import decode_token
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid token scheme")
-    
+
     token = authorization.split(" ")[1]
     try:
         payload = decode_token(token, expected_aud="end_user")
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
-        
+
+    jti = payload.get("jti")
+    if jti and revocation_repo.is_token_revoked(jti):
+        raise HTTPException(status_code=401, detail="Token has been revoked")
+
     if payload.get("project_id") != project_id:
         raise HTTPException(status_code=403, detail="Token not valid for this project")
-        
+
     return payload.get("sub")
 
 @router.post("/register", response_model=EndUserResponse, status_code=status.HTTP_201_CREATED)
@@ -121,3 +128,26 @@ def get_me(
         "is_verified": user["is_verified"],
         "created_at": user["created_at"]
     }
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    project_id: str,
+    authorization: str = Header(..., description="Bearer token"),
+    revocation_repo = Depends(get_revocation_repo)
+):
+    from app.auth import decode_token
+    from datetime import datetime, timezone
+    if not authorization.startswith("Bearer "):
+        return
+    token = authorization.split(" ")[1]
+    try:
+        payload = decode_token(token, expected_aud="end_user")
+        if payload.get("project_id") != project_id:
+            return
+        jti = payload.get("jti")
+        exp = payload.get("exp")
+        if jti and exp:
+            expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+            revocation_repo.revoke_token(jti, expires_at)
+    except Exception:
+        pass

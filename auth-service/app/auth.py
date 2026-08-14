@@ -62,6 +62,8 @@ def create_refresh_token(data: dict, aud: str = "developer", project_id: str | N
 
 def _create_token(data: dict, expires_delta: timedelta, token_type: str | None = None, aud: str = "developer", project_id: str | None = None):
     to_encode = data.copy()
+    import uuid
+    to_encode["jti"] = str(uuid.uuid4())
 
     if token_type:
         to_encode["token_type"] = token_type

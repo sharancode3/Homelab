@@ -477,3 +477,46 @@ class SQLiteProjectAuthorizationRepository(ProjectAuthorizationRepository):
             (project_id, key_id)
         )
         self._conn.commit()
+
+class SQLiteRevocationRepository:
+    def __init__(self, db_path: str = ":memory:") -> None:
+        self._db_path = db_path
+        self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        self._init_db()
+
+    def _init_db(self) -> None:
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS revoked_tokens (
+                jti TEXT PRIMARY KEY,
+                expires_at TIMESTAMP NOT NULL
+            )
+            """
+        )
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_expires_at ON revoked_tokens(expires_at)")
+        self._conn.commit()
+
+    def revoke_token(self, jti: str, expires_at: datetime) -> None:
+        import random
+        self._conn.execute(
+            "INSERT OR IGNORE INTO revoked_tokens (jti, expires_at) VALUES (?, ?)",
+            (jti, expires_at)
+        )
+        self._conn.commit()
+        # Prune 5% of the time to keep storage bounded without heavy constant overhead
+        if random.random() < 0.05:
+            self.prune_expired()
+
+    def is_token_revoked(self, jti: str) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM revoked_tokens WHERE jti = ?", (jti,)
+        ).fetchone()
+        return row is not None
+
+    def prune_expired(self) -> None:
+        self._conn.execute(
+            "DELETE FROM revoked_tokens WHERE expires_at < ?",
+            (datetime.utcnow(),)
+        )
+        self._conn.commit()

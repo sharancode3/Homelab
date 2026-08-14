@@ -98,3 +98,13 @@ class UserRepository(Protocol):
 
     def get_by_email(self, email: str) -> DeveloperUser | None:
         ...
+
+class RevocationRepository(Protocol):
+    def revoke_token(self, jti: str, expires_at: datetime) -> None:
+        ...
+
+    def is_token_revoked(self, jti: str) -> bool:
+        ...
+
+    def prune_expired(self) -> None:
+        ...

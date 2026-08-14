@@ -4,7 +4,7 @@ from app.api.rate_limiter import rate_limit_ip
 from app.api.auth_models import UserRegisterRequest, UserLoginRequest, AuthTokenResponse, RefreshRequest, AccessTokenResponse, UserResponse
 from app.api.auth_service import AuthServiceLayer, InvalidCredentialsException, UserAlreadyExistsException, InvalidRefreshTokenException
 from app.identity.models import DeveloperUser
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, get_revocation_repo, oauth2_scheme
 
 # Dependency placeholder to be overridden in main.py
 def get_auth_service() -> AuthServiceLayer:
@@ -74,3 +74,21 @@ def refresh_token(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    token: str = Depends(oauth2_scheme),
+    revocation_repo = Depends(get_revocation_repo)
+):
+    from app.auth import decode_token
+    from datetime import datetime, timezone
+    try:
+        payload = decode_token(token, expected_aud="developer")
+        jti = payload.get("jti")
+        exp = payload.get("exp")
+        if jti and exp:
+            expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+            revocation_repo.revoke_token(jti, expires_at)
+    except Exception:
+        # Ignore invalid tokens during logout
+        pass

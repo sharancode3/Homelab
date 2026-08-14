@@ -62,13 +62,17 @@ class TestPlatformIdentity(unittest.TestCase):
         
         token = create_access_token({"sub": user.user_id, "email": user.email})
         
-        resolved_user = get_current_user(token=token, user_repo=self.repo)
+        from app.storage.providers.sqlite import SQLiteRevocationRepository
+        revocation_repo = SQLiteRevocationRepository(db_path=":memory:")
+        resolved_user = get_current_user(token=token, user_repo=self.repo, revocation_repo=revocation_repo)
         self.assertEqual(resolved_user.user_id, user.user_id)
         self.assertEqual(resolved_user.email, user.email)
 
     def test_auth_dependency_invalid_token(self):
+        from app.storage.providers.sqlite import SQLiteRevocationRepository
+        revocation_repo = SQLiteRevocationRepository(db_path=":memory:")
         with self.assertRaises(HTTPException):
-            get_current_user(token="invalid.token.here", user_repo=self.repo)
+            get_current_user(token="invalid.token.here", user_repo=self.repo, revocation_repo=revocation_repo)
 
 if __name__ == "__main__":
     unittest.main()

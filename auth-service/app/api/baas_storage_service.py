@@ -30,7 +30,10 @@ class BaaSStorageService:
         content_length: int,
         stream: BinaryIO
     ) -> Dict[str, Any]:
-        
+
+        import os
+        filename = os.path.basename(filename)
+
         # Check overall project quota before starting stream
         current_usage = self._storage_repo.get_project_storage_usage(project_id)
         if current_usage + content_length > self.max_project_quota:

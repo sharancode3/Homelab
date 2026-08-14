@@ -18,11 +18,23 @@ from app.identity.models import DeveloperUser
 def get_user_repository():
     raise NotImplementedError("Dependency should be overridden in app startup.")
 
+def get_revocation_repo():
+    raise NotImplementedError("Dependency should be overridden in app startup.")
+
 def get_current_user(
     token: str = Security(oauth2_scheme),
-    user_repo = Depends(get_user_repository)
+    user_repo = Depends(get_user_repository),
+    revocation_repo = Depends(get_revocation_repo)
 ) -> DeveloperUser:
     payload = decode_token(token, expected_aud="developer")
+
+    jti = payload.get("jti")
+    if jti and revocation_repo.is_token_revoked(jti):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     if payload.get("token_type") != "access":
         raise HTTPException(
