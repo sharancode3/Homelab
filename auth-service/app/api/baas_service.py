@@ -16,11 +16,13 @@ class BaaSProjectServiceLayer:
         authz_repo: ProjectAuthorizationRepository,
         registry: ProjectRegistryManager,
         user_repo: UserRepository,
+        tenant_db: "TenantDatabaseManager" = None,
     ) -> None:
         self._internal = internal_service
         self._authz = authz_repo
         self._registry = registry
         self._user_repo = user_repo
+        self._tenant_db = tenant_db
 
     def create_project(self, user_id: str, req: BaaSProjectCreateRequest) -> BaaSProjectResponse:
         # Generate project ID securely with digits to match pattern '^proj_\d{4,}$'
@@ -198,3 +200,48 @@ class BaaSProjectServiceLayer:
         name = key["name"]
         self._authz.revoke_api_key(project_id, key_id)
         return self.create_api_key(project_id, name, user_id)
+
+    # Table Management (Control Plane)
+    def create_table(self, project_id: str, table_name: str, columns: dict[str, str]) -> None:
+        if not self._tenant_db: return
+        self._tenant_db.create_table(project_id, table_name, columns)
+
+    def list_tables(self, project_id: str) -> list[str]:
+        if not self._tenant_db: return []
+        return self._tenant_db.list_tables(project_id)
+
+    def get_table_schema(self, project_id: str, table_name: str) -> list[dict]:
+        if not self._tenant_db: return []
+        return self._tenant_db.get_table_schema(project_id, table_name)
+
+    def delete_table(self, project_id: str, table_name: str) -> None:
+        if not self._tenant_db: return
+        self._tenant_db.delete_table(project_id, table_name)
+
+    # Data CRUD (Data Plane)
+    def insert_row(self, project_id: str, table_name: str, data: dict) -> str:
+        if not self._tenant_db: return ""
+        return self._tenant_db.insert_row(project_id, table_name, data)
+
+    def get_row(self, project_id: str, table_name: str, row_id: str) -> dict:
+        if not self._tenant_db: return None
+        row = self._tenant_db.get_row(project_id, table_name, row_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Row not found")
+        return row
+
+    def list_rows(self, project_id: str, table_name: str, limit: int = 100, offset: int = 0) -> list[dict]:
+        if not self._tenant_db: return []
+        return self._tenant_db.list_rows(project_id, table_name, limit, offset)
+
+    def update_row(self, project_id: str, table_name: str, row_id: str, data: dict) -> None:
+        if not self._tenant_db: return
+        updated = self._tenant_db.update_row(project_id, table_name, row_id, data)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Row not found")
+
+    def delete_row(self, project_id: str, table_name: str, row_id: str) -> None:
+        if not self._tenant_db: return
+        deleted = self._tenant_db.delete_row(project_id, table_name, row_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Row not found")

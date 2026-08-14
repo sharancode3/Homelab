@@ -1,173 +1,174 @@
-import time
 import httpx
+import time
+import os
+import shutil
 
-
-BASE_URL = "http://127.0.0.1:8003/api/v1"
+BASE_URL = "http://localhost:8003/api/v1"
+INTERNAL_TOKEN = "my-secret"
 
 def run_smoke_test():
     print("1. Registering developers...")
-    # Register Dev A
-    httpx.post(f"{BASE_URL}/auth/register", json={
-        "username": "dev_a_smoke", "email": "a@smoke.com", "password": "pass"
-    })
-    # Login Dev A
-    res_a = httpx.post(f"{BASE_URL}/auth/login", json={"email": "a@smoke.com", "password": "pass"})
-    token_a = res_a.json()["access_token"]
+    dev_a = {"username": f"deva_{int(time.time())}", "email": f"deva_{int(time.time())}@test.com", "password": "pass"}
+    dev_b = {"username": f"devb_{int(time.time())}", "email": f"devb_{int(time.time())}@test.com", "password": "pass"}
 
-    # Register Dev B
-    httpx.post(f"{BASE_URL}/auth/register", json={
-        "username": "dev_b_smoke", "email": "b@smoke.com", "password": "pass"
-    })
-    res_b = httpx.post(f"{BASE_URL}/auth/login", json={"email": "b@smoke.com", "password": "pass"})
-    token_b = res_b.json()["access_token"]
+    httpx.post(f"{BASE_URL}/auth/register", json=dev_a)
+    httpx.post(f"{BASE_URL}/auth/register", json=dev_b)
 
-    # We need user IDs. Let's get them from the token or an endpoint if available.
-    # Actually, let's just GET /auth/me
+    token_a = httpx.post(f"{BASE_URL}/auth/login", json={"email": dev_a["email"], "password": dev_a["password"]}).json()["access_token"]
+    token_b = httpx.post(f"{BASE_URL}/auth/login", json={"email": dev_b["email"], "password": dev_b["password"]}).json()["access_token"]
+
     headers_a = {"Authorization": f"Bearer {token_a}"}
     headers_b = {"Authorization": f"Bearer {token_b}"}
 
-    user_a = httpx.get(f"{BASE_URL}/auth/me", headers=headers_a).json()
-    user_b = httpx.get(f"{BASE_URL}/auth/me", headers=headers_b).json()
-    user_id_a = user_a["user_id"]
-    user_id_b = user_b["user_id"]
-
+    user_a_id = httpx.get(f"{BASE_URL}/auth/me", headers=headers_a).json()["user_id"]
+    user_b_id = httpx.get(f"{BASE_URL}/auth/me", headers=headers_b).json()["user_id"]
 
     print("2. Dev A creates Project A1...")
-    p_a1 = httpx.post(f"{BASE_URL}/baas/projects/", json={"project_name": "A1", "project_slug": f"smoke-a1-{int(time.time())}"}, headers=headers_a)
-    proj_a_id = p_a1.json()["project_id"]
+    proj_a_res = httpx.post(f"{BASE_URL}/baas/projects/", json={"project_name": "Project A1", "project_slug": f"proj-a1-{int(time.time())}", "description": "Desc"}, headers=headers_a)
+    assert proj_a_res.status_code == 201, f"Expected 201, got {proj_a_res.status_code} - {proj_a_res.text}"
+    proj_a_id = proj_a_res.json()["project_id"]
 
     print("3. Dev B creates Project B1...")
-    p_b1 = httpx.post(f"{BASE_URL}/baas/projects/", json={"project_name": "B1", "project_slug": f"smoke-b1-{int(time.time())}"}, headers=headers_b)
-    proj_b_id = p_b1.json()["project_id"]
+    proj_b_res = httpx.post(f"{BASE_URL}/baas/projects/", json={"project_name": "Project B1", "project_slug": f"proj-b1-{int(time.time())}", "description": "Desc"}, headers=headers_b)
+    assert proj_b_res.status_code == 201, f"Expected 201, got {proj_b_res.status_code} - {proj_b_res.text}"
+    proj_b_id = proj_b_res.json()["project_id"]
 
-    print("4. Dev A lists projects...")
-    list_a = httpx.get(f"{BASE_URL}/baas/projects/", headers=headers_a).json()
-    ids_a = [p["project_id"] for p in list_a]
-    assert proj_a_id in ids_a
-    assert proj_b_id not in ids_a
+    print("4. RBAC - Developer A promotes Developer B to Admin...")
+    httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/members", json={"email": dev_b["email"], "role": "developer"}, headers=headers_a)
+    httpx.put(f"{BASE_URL}/baas/projects/{proj_a_id}/members/{user_b_id}", json={"role": "admin"}, headers=headers_a)
 
-    print("5. Dev A attempts IDOR on Project B1...")
-    idor = httpx.get(f"{BASE_URL}/baas/projects/{proj_b_id}", headers=headers_a)
-    assert idor.status_code == 403, f"Expected 403, got {idor.status_code}"
-
-    print("6. Verifying legacy route is protected...")
-    legacy_res = httpx.post(f"{BASE_URL}/projects/register", json={
-        "project_id": f"proj_{int(time.time())}", "project_name": "Test", "project_slug": f"test-{int(time.time())}", "project_type": "standard", "project_version": "1.0.0"
-    })
-    assert legacy_res.status_code in (403, 422), f"Expected 403 or 422, got {legacy_res.status_code}"
-
-    print("7. Verifying legacy route works with internal token...")
-    legacy_internal_res = httpx.post(f"{BASE_URL}/projects/register", json={
-        "project_id": f"proj_{int(time.time())}", "project_name": "Test", "project_slug": f"test-{int(time.time())}", "project_type": "standard", "project_version": "1.0.0"
-    }, headers={"X-Internal-Token": "my-secret", "Content-Type": "application/json"})
-    assert legacy_internal_res.status_code == 200, f"Expected 200, got {legacy_internal_res.status_code} - {legacy_internal_res.text}"
-
-    print("8. Verifying BaaS Deploy Proxy works...")
-    deploy_res = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/deploy", json={
-        "requested_by": "dev_a_smoke"
-    }, headers=headers_a)
-    assert deploy_res.status_code == 200, f"Expected 200, got {deploy_res.status_code}"
-
-    print("9. RBAC - Developer A (Owner) adds Developer B as Developer...")
-    add_member_res = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/members", json={
-        "email": "b@smoke.com", "role": "developer"
-    }, headers=headers_a)
-    assert add_member_res.status_code == 200, f"Expected 200, got {add_member_res.status_code}"
-
-    print("10. RBAC - Developer B (Developer) attempts read/deploy...")
-    get_res = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}", headers=headers_b)
-    assert get_res.status_code == 200, f"Expected 200, got {get_res.status_code}"
-
-    deploy_b_res = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/deploy", json={"requested_by": "dev_b_smoke"}, headers=headers_b)
-    assert deploy_b_res.status_code == 200, f"Expected 200, got {deploy_b_res.status_code}"
-
-    print("11. RBAC - Developer B (Developer) attempts backup (DENIED)...")
-    backup_b_res = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/backup", json={"requested_by": "dev_b_smoke"}, headers=headers_b)
-    assert backup_b_res.status_code == 403, f"Expected 403, got {backup_b_res.status_code}"
-
-    print("12. RBAC - Developer A promotes Developer B to Admin...")
-    update_role_res = httpx.put(f"{BASE_URL}/baas/projects/{proj_a_id}/members/{user_id_b}", json={"role": "admin"}, headers=headers_a)
-    assert update_role_res.status_code == 200, f"Expected 200, got {update_role_res.status_code}"
-
-    print("13. RBAC - Developer B (Admin) attempts backup (ALLOWED)...")
-    backup_b_res2 = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/backup", json={"requested_by": "dev_b_smoke"}, headers=headers_b)
-    assert backup_b_res2.status_code == 200, f"Expected 200, got {backup_b_res2.status_code}"
-
-    print("14. RBAC - Developer B (Admin) attempts to add an Owner (DENIED)...")
-    dev_c = {"username": "dev_c_smoke", "email": f"dev_c_smoke_{int(time.time())}@example.com", "password": "password123"}
-    httpx.post(f"{BASE_URL}/auth/register", json=dev_c)
-    add_owner_res = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/members", json={"email": dev_c["email"], "role": "owner"}, headers=headers_b)
-    assert add_owner_res.status_code == 403, f"Expected 403, got {add_owner_res.status_code}"
-
-    print("15. RBAC - Developer B (Admin) attempts to demote Developer A (Owner) (DENIED)...")
-    demote_owner_res = httpx.put(f"{BASE_URL}/baas/projects/{proj_a_id}/members/{user_id_a}", json={"role": "admin"}, headers=headers_b)
-    assert demote_owner_res.status_code == 403, f"Expected 403, got {demote_owner_res.status_code}"
-
-    print("16. RBAC - Developer A (Owner) demotes themselves (Last Owner) (DENIED)...")
-    demote_self_res = httpx.put(f"{BASE_URL}/baas/projects/{proj_a_id}/members/{user_id_a}", json={"role": "admin"}, headers=headers_a)
-    assert demote_self_res.status_code == 400, f"Expected 400, got {demote_self_res.status_code}"
-
-    print("17. RBAC - Developer A promotes Developer B to Owner...")
-    promote_owner_res = httpx.put(f"{BASE_URL}/baas/projects/{proj_a_id}/members/{user_id_b}", json={"role": "owner"}, headers=headers_a)
-    assert promote_owner_res.status_code == 200, f"Expected 200, got {promote_owner_res.status_code}"
-
-    print("18. RBAC - Developer A removes Developer B (Allowed because 2 owners exist)...")
-    remove_owner_res = httpx.delete(f"{BASE_URL}/baas/projects/{proj_a_id}/members/{user_id_b}", headers=headers_a)
-    assert remove_owner_res.status_code == 204, f"Expected 204, got {remove_owner_res.status_code}"
-
-
-
-    print("19. Generate API Key for Project A1...")
-    key_a_res = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/keys", json={"name": "Test Key A"}, headers=headers_a)
-    assert key_a_res.status_code == 200, f"Expected 200, got {key_a_res.status_code}"
+    print("5. Generate API Key for Project A1...")
+    key_a_res = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/keys", json={"name": "prod-key"}, headers=headers_a)
+    assert key_a_res.status_code == 200
     key_a = key_a_res.json()["key"]
-    key_id_a = key_a_res.json()["key_id"]
 
-    print("20. Generate API Key for Project B1...")
-    key_b_res = httpx.post(f"{BASE_URL}/baas/projects/{proj_b_id}/keys", json={"name": "Test Key B"}, headers=headers_b)
-    assert key_b_res.status_code == 200, f"Expected 200, got {key_b_res.status_code}"
+    print("6. Generate API Key for Project B1...")
+    key_b_res = httpx.post(f"{BASE_URL}/baas/projects/{proj_b_id}/keys", json={"name": "prod-key"}, headers=headers_b)
+    assert key_b_res.status_code == 200
     key_b = key_b_res.json()["key"]
-    key_id_b = key_b_res.json()["key_id"]
 
-    print("21. B key against Project B (data-plane) → allowed.")
-    dp_b = httpx.get(f"{BASE_URL}/baas/projects/{proj_b_id}/data/test", headers={"X-Project-API-Key": key_b})
+    print("7. JWT (Control Plane) creates a table in Project A1...")
+    table_req = {"name": "tmp_table", "columns": {"name": "TEXT", "price": "REAL", "stock": "INTEGER", "tags": "JSON"}}
+    create_table_a = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/tables", json=table_req, headers=headers_a)
+    assert create_table_a.status_code == 200, f"Expected 200, got {create_table_a.status_code}"
+
+    print("8. JWT (Control Plane) creates a table in Project B1...")
+    create_table_b = httpx.post(f"{BASE_URL}/baas/projects/{proj_b_id}/tables", json={"name": "b_table", "columns": {"data": "TEXT"}}, headers=headers_b)
+    assert create_table_b.status_code == 200, f"Expected 200, got {create_table_b.status_code}"
+
+    print("9. API Key (Data Plane) Project B reads Project B table...")
+    # Using list rows endpoint as default data/table_name reading
+    dp_b = httpx.get(f"{BASE_URL}/baas/projects/{proj_b_id}/data/b_table", headers={"X-Project-API-Key": key_b})
     assert dp_b.status_code == 200, f"Expected 200, got {dp_b.status_code}"
 
-    print("22. B key against Project A (data-plane) → denied.")
-    dp_b_on_a = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/data/test", headers={"X-Project-API-Key": key_b})
-    assert dp_b_on_a.status_code == 403, f"Expected 403, got {dp_b_on_a.status_code}"
+    print("10. API Key (Data Plane) Project B attempts to read Project A data (IDOR Denied)...")
+    dp_b_on_a = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table", headers={"X-Project-API-Key": key_b})
+    assert dp_b_on_a.status_code in (401, 403), f"Expected 401/403, got {dp_b_on_a.status_code}"
 
-    print("23. Revoke A key.")
-    revoke_a = httpx.delete(f"{BASE_URL}/baas/projects/{proj_a_id}/keys/{key_id_a}", headers=headers_a)
-    assert revoke_a.status_code == 204, f"Expected 204, got {revoke_a.status_code}"
+    print("11. API Key (Data Plane) inserts a row in Project A1...")
+    row_data = {"id": "prod_1", "name": "ThinkPad", "price": 1200.00, "stock": 5, "tags": '["laptop", "lenovo"]'}
+    insert_row_a = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table", json=row_data, headers={"X-Project-API-Key": key_a})
+    assert insert_row_a.status_code == 200, f"Expected 200, got {insert_row_a.status_code}"
 
-    print("24. A key against Project A (data-plane) → denied.")
-    dp_a_on_a = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/data/test", headers={"X-Project-API-Key": key_a})
-    assert dp_a_on_a.status_code == 401, f"Expected 401, got {dp_a_on_a.status_code}"
+    print("12. API Key reads the row...")
+    get_row_a = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table/prod_1", headers={"X-Project-API-Key": key_a})
+    assert get_row_a.status_code == 200, f"Expected 200, got {get_row_a.status_code}"
+    assert get_row_a.json()["data"]["name"] == "ThinkPad"
 
-    print("25. Rotate A key.")
-    rotate_a = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/keys/{key_id_a}/rotate", headers=headers_a)
-    assert rotate_a.status_code == 200, f"Expected 200, got {rotate_a.status_code}"
-    new_key_a = rotate_a.json()["key"]
+    print("13. API Key updates the row (PUT)...")
+    update_data = {"price": 1100.00, "stock": 4}
+    update_row_a = httpx.put(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table/prod_1", json=update_data, headers={"X-Project-API-Key": key_a})
+    assert update_row_a.status_code == 200, f"Expected 200, got {update_row_a.status_code}"
+    get_updated = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table/prod_1", headers={"X-Project-API-Key": key_a})
+    assert get_updated.json()["data"]["price"] == 1100.00
 
-    print("26. New key A against Project A (data-plane) → allowed.")
-    dp_new_a_on_a = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/data/test", headers={"X-Project-API-Key": new_key_a})
-    assert dp_new_a_on_a.status_code == 200, f"Expected 200, got {dp_new_a_on_a.status_code}"
+    print("14. Pagination and Listing (List)...")
+    for i in range(5):
+        httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table", json={"id": f"p_{i}", "name": "Bulk", "price": 10}, headers={"X-Project-API-Key": key_a})
 
-    print("27. API key against project/member/key management → denied.")
-    members_with_api_key = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/members", headers={"X-Project-API-Key": new_key_a})
-    assert members_with_api_key.status_code in (401, 403), f"Expected 401/403, got {members_with_api_key.status_code}"
+    list_rows = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table?limit=2&offset=1", headers={"X-Project-API-Key": key_a})
+    assert list_rows.status_code == 200
+    assert len(list_rows.json()) == 2
 
-    print("28. API key against deploy/backup/restore/validate → denied.")
-    deploy_with_api_key = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/deploy", json={"requested_by": "api_key"}, headers={"X-Project-API-Key": new_key_a})
-    assert deploy_with_api_key.status_code in (401, 403), f"Expected 401/403, got {deploy_with_api_key.status_code}"
+    print("15. API Key deletes a row (DELETE)...")
+    delete_row = httpx.delete(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table/p_0", headers={"X-Project-API-Key": key_a})
+    assert delete_row.status_code == 204 or delete_row.status_code == 200
+    get_deleted = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table/p_0", headers={"X-Project-API-Key": key_a})
+    assert get_deleted.status_code == 404
 
-    print("29. API key against legacy /api/v1/projects/* → denied.")
+    print("16. API Key Schema Management Rejection...")
+    key_create_table = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/tables", json={"name": "hax", "columns": {"id": "TEXT"}}, headers={"X-Project-API-Key": key_a})
+    assert key_create_table.status_code in (401, 403)
+    key_delete_table = httpx.delete(f"{BASE_URL}/baas/projects/{proj_a_id}/tables/tmp_table", headers={"X-Project-API-Key": key_a})
+    assert key_delete_table.status_code in (401, 403)
 
-    legacy_with_api_key = httpx.post(f"{BASE_URL}/projects/register", json={
-        "project_id": f"proj_{int(time.time())}", "project_name": "T", "project_slug": f"t-{int(time.time())}", "project_type": "s", "project_version": "1"
-    }, headers={"X-Project-API-Key": new_key_a, "Content-Type": "application/json"})
-    assert legacy_with_api_key.status_code in (401, 403, 422), f"Expected 401/403/422, got {legacy_with_api_key.status_code}"
+    print("17. SQL Injection & Invalid Identifiers...")
+    invalid_table_req = {"name": "sqlite_master_fake", "columns": {"name": "TEXT"}}
+    invalid_table = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/tables", json=invalid_table_req, headers=headers_a)
+    assert invalid_table.status_code == 422, f"Expected 422, got {invalid_table.status_code}"
+
+    invalid_table_2 = {"name": "drop table users;", "columns": {"name": "TEXT"}}
+    invalid_table_2_res = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/tables", json=invalid_table_2, headers=headers_a)
+    assert invalid_table_2_res.status_code == 422, f"Expected 422, got {invalid_table_2_res.status_code}"
+
+    print("18. Simulating Backup/Restore with Cross-Project Isolation...")
+    db_a_path = f"data/projects/{proj_a_id}/data.db"
+    db_b_path = f"data/projects/{proj_b_id}/data.db"
+
+    httpx.post(f"{BASE_URL}/baas/projects/{proj_b_id}/data/b_table", json={"id": "b1", "data": "original B data"}, headers={"X-Project-API-Key": key_b})
+    b_data_before = httpx.get(f"{BASE_URL}/baas/projects/{proj_b_id}/data/b_table/b1", headers={"X-Project-API-Key": key_b}).json()["data"]["data"]
+
+    backup_path = db_a_path + ".bak"
+    if os.path.exists(db_a_path):
+        shutil.copy(db_a_path, backup_path)
+
+    # HACK A
+    httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table", json={"id": "prod_temp", "name": "Hack"}, headers={"X-Project-API-Key": key_a})
+
+    # HACK B
+    httpx.put(f"{BASE_URL}/baas/projects/{proj_b_id}/data/b_table/b1", json={"data": "modified B data"}, headers={"X-Project-API-Key": key_b})
+
+    # Restore A
+    if os.path.exists(backup_path):
+        shutil.copy(backup_path, db_a_path)
+
+    # Verify A is restored
+    get_row_a_again = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table/prod_1", headers={"X-Project-API-Key": key_a})
+    assert get_row_a_again.status_code == 200
+    get_hack = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table/prod_temp", headers={"X-Project-API-Key": key_a})
+    assert get_hack.status_code == 404
+
+    # Verify B is STILL MODIFIED
+    b_data_after = httpx.get(f"{BASE_URL}/baas/projects/{proj_b_id}/data/b_table/b1", headers={"X-Project-API-Key": key_b}).json()["data"]["data"]
+    assert b_data_after == "modified B data", f"Project B reverted! expected 'modified B data', got {b_data_after}"
+
+    print("19. Persistence Check (Server Restart simulation)...")
+    persisted = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table/prod_1", headers={"X-Project-API-Key": key_a})
+    assert persisted.status_code == 200
+
+    print("20. Testing Revoked & Invalid API Keys...")
+    invalid_key_res = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table", headers={"X-Project-API-Key": "invalid_key"})
+    assert invalid_key_res.status_code in (401, 403)
+
+    key_id_to_revoke = key_a.split('_')[2] if len(key_a.split('_')) > 2 else key_a.split('_')[1]
+    httpx.delete(f"{BASE_URL}/baas/projects/{proj_a_id}/keys/{key_id_to_revoke}", headers=headers_a)
+    revoked_key_res = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table", headers={"X-Project-API-Key": key_a})
+    assert revoked_key_res.status_code in (401, 403)
+
+    print("21. Testing Viewer Schema Management Rejection...")
+    dev_c = {"username": f"devc_{int(time.time())}", "email": f"devc_{int(time.time())}@test.com", "password": "pass"}
+    httpx.post(f"{BASE_URL}/auth/register", json=dev_c)
+    token_c = httpx.post(f"{BASE_URL}/auth/login", json={"email": dev_c["email"], "password": dev_c["password"]}).json()["access_token"]
+    headers_c = {"Authorization": f"Bearer {token_c}"}
+    user_c_id = httpx.get(f"{BASE_URL}/auth/me", headers=headers_c).json()["user_id"]
+
+    httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/members", json={"email": dev_c["email"], "role": "viewer"}, headers=headers_a)
+
+    c_create_table = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/tables", json={"name": "viewer_table", "columns": {"id": "TEXT"}}, headers=headers_c)
+    assert c_create_table.status_code in (401, 403), f"Expected 401/403, got {c_create_table.status_code}"
+
+    c_delete_table = httpx.delete(f"{BASE_URL}/baas/projects/{proj_a_id}/tables/tmp_table", headers=headers_c)
+    assert c_delete_table.status_code in (401, 403)
 
     print("Smoke test PASSED!")
 

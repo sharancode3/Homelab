@@ -34,6 +34,7 @@ from app.storage.providers.sqlite import (
     SQLiteUserRepository,
     SQLiteProjectAuthorizationRepository,
 )
+from app.storage.providers.sqlite_tenant import SQLiteTenantConnectionFactory, TenantDatabaseManager
 
 logger = StructuredLogger(component="app_runtime")
 
@@ -102,11 +103,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # 9. BaaS Service Layer
     authz_repo = SQLiteProjectAuthorizationRepository(db_path="data/authz.db")
+    tenant_factory = SQLiteTenantConnectionFactory(storage_path="data")
+    tenant_db = TenantDatabaseManager(factory=tenant_factory)
     baas_service = BaaSProjectServiceLayer(
         internal_service=api_service,
         authz_repo=authz_repo,
         registry=registry_manager,
-        user_repo=user_repo
+        user_repo=user_repo,
+        tenant_db=tenant_db
     )
 
     app.dependency_overrides[get_api_service] = lambda: api_service
@@ -129,12 +133,21 @@ app = FastAPI(
     debug=config.debug,
 )
 
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from app.storage.providers.sqlite_tenant import TenantDatabaseError
+
+@app.exception_handler(TenantDatabaseError)
+async def tenant_database_error_handler(request: Request, exc: TenantDatabaseError):
+    return JSONResponse(
+        status_code=422,
+        content={"detail": str(exc)},
+    )
+
 # Register routes
 app.include_router(router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(baas_project_router, prefix="/api/v1/baas")
-
-
 
 if __name__ == "__main__":
     import uvicorn

@@ -78,13 +78,67 @@ def get_health(
 from app.api.baas_models import ProjectMemberResponse, AddMemberRequest, UpdateMemberRoleRequest, ApiKeyCreateRequest, ApiKeyResponse, ApiKeyListResponse
 from app.api.dependencies import verify_project_api_key
 
-@router.get("/{project_id}/data/test", response_model=dict)
-def data_plane_test(
+from app.api.baas_models import TableCreateRequest, TableResponse, RowCreateResponse, RowResponse
+from typing import Dict, Any
+
+# ================== DATA PLANE (API KEY) ==================
+
+@router.post("/{project_id}/data/{table_name}", response_model=RowCreateResponse)
+def insert_row(
     project_id: str,
+    table_name: str,
+    data: Dict[str, Any],
     service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
     verified_project_id: str = Depends(verify_project_api_key),
 ):
-    return {"status": "success", "project_id": verified_project_id, "message": "Data plane accessed via API key"}
+    row_id = service.insert_row(verified_project_id, table_name, data)
+    return {"id": row_id}
+
+@router.get("/{project_id}/data/{table_name}", response_model=list[RowResponse])
+def list_rows(
+    project_id: str,
+    table_name: str,
+    limit: int = 100,
+    offset: int = 0,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    verified_project_id: str = Depends(verify_project_api_key),
+):
+    rows = service.list_rows(verified_project_id, table_name, limit, offset)
+    return [{"data": r} for r in rows]
+
+@router.get("/{project_id}/data/{table_name}/{row_id}", response_model=RowResponse)
+def get_row(
+    project_id: str,
+    table_name: str,
+    row_id: str,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    verified_project_id: str = Depends(verify_project_api_key),
+):
+    row = service.get_row(verified_project_id, table_name, row_id)
+    return {"data": row}
+
+@router.put("/{project_id}/data/{table_name}/{row_id}")
+def update_row(
+    project_id: str,
+    table_name: str,
+    row_id: str,
+    data: Dict[str, Any],
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    verified_project_id: str = Depends(verify_project_api_key),
+):
+    service.update_row(verified_project_id, table_name, row_id, data)
+    return {"status": "success"}
+
+@router.delete("/{project_id}/data/{table_name}/{row_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_row(
+    project_id: str,
+    table_name: str,
+    row_id: str,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    verified_project_id: str = Depends(verify_project_api_key),
+):
+    service.delete_row(verified_project_id, table_name, row_id)
+
 
 @router.post("/{project_id}/keys", response_model=ApiKeyResponse)
 def create_api_key(
@@ -158,3 +212,42 @@ def remove_member(
     role: str = Depends(require_admin),
 ):
     service.remove_member(project_id, target_user_id, role)
+
+# ================== CONTROL PLANE (TABLE SCHEMA) ==================
+
+@router.post("/{project_id}/tables", response_model=TableResponse)
+def create_table(
+    project_id: str,
+    req: TableCreateRequest,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_admin),
+):
+    service.create_table(project_id, req.name, req.columns)
+    return {"name": req.name}
+
+@router.get("/{project_id}/tables", response_model=list[TableResponse])
+def list_tables(
+    project_id: str,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_viewer),
+):
+    tables = service.list_tables(project_id)
+    return [{"name": t} for t in tables]
+
+@router.get("/{project_id}/tables/{table_name}")
+def get_table_schema(
+    project_id: str,
+    table_name: str,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_viewer),
+):
+    return service.get_table_schema(project_id, table_name)
+
+@router.delete("/{project_id}/tables/{table_name}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_table(
+    project_id: str,
+    table_name: str,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_admin),
+):
+    service.delete_table(project_id, table_name)

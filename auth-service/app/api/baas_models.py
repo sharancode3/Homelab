@@ -46,3 +46,20 @@ class ApiKeyListResponse(BaseModel):
     name: str
     created_at: str
     is_active: bool
+
+class TableColumnDef(BaseModel):
+    name: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z_][a-zA-Z0-9_]{0,63}$")
+    type: str
+
+class TableCreateRequest(BaseModel):
+    name: str = Field(..., pattern=r'^[a-zA-Z_][a-zA-Z0-9_]{0,63}$')
+    columns: dict[str, str]
+
+class TableResponse(BaseModel):
+    name: str
+
+class RowCreateResponse(BaseModel):
+    id: str
+
+class RowResponse(BaseModel):
+    data: dict
