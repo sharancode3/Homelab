@@ -269,6 +269,25 @@ def run_smoke_test():
     if me_end_user.status_code != 200:
         raise AssertionError(f"Expected 200 on end user me, got {me_end_user.status_code}")
 
+    print("26. Testing Storage Service (Upload, List, Download, Delete)...")
+    file_content = b"Smoke Test File Content"
+    upload_res = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/storage/", headers=headers_a, files={"file": ("smoke.txt", file_content, "text/plain")})
+    if upload_res.status_code != 201:
+        raise AssertionError(f"Expected 201 on file upload, got {upload_res.status_code}: {upload_res.text}")
+    file_id = upload_res.json()["id"]
+
+    list_res = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/storage/", headers=headers_a)
+    if list_res.status_code != 200 or len(list_res.json()) == 0:
+        raise AssertionError(f"Expected 200 and >= 1 file on list, got {list_res.status_code}")
+
+    download_res = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/storage/{file_id}", headers=headers_a)
+    if download_res.status_code != 200 or download_res.content != file_content:
+        raise AssertionError(f"Expected 200 and exact content on download, got {download_res.status_code}")
+
+    delete_res = httpx.delete(f"{BASE_URL}/baas/projects/{proj_a_id}/storage/{file_id}", headers=headers_a)
+    if delete_res.status_code != 204:
+        raise AssertionError(f"Expected 204 on delete, got {delete_res.status_code}")
+
     print("✅ All smoke-test steps passed successfully!")
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.api.dependencies import verify_internal_token
+from app.api.baas_project_routes import router as baas_project_router
+from app.api.baas_auth_routes import router as baas_auth_router
 
 from app.api.models import (
     BackupRequest,
@@ -21,7 +23,6 @@ def get_api_service() -> APIServiceLayer:
     raise NotImplementedError("Dependency should be overridden in app startup.")
 
 router = APIRouter(prefix="/projects", tags=["projects"], dependencies=[Depends(verify_internal_token)])
-
 
 @router.post("/register", response_model=ProjectRegisterResponse)
 def register_project(

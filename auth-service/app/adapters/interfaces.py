@@ -7,8 +7,16 @@ class StorageAdapter(Protocol):
         """Create a storage artifact and return its reference URI/ID."""
         ...
 
+    def create_artifact_stream(self, path: str, stream: Any) -> str:
+        """Create a storage artifact from a binary stream (e.g., UploadFile.file) and return its reference URI/ID."""
+        ...
+
     def read_artifact(self, reference: str) -> bytes:
         """Read an artifact from storage by its reference."""
+        ...
+
+    def read_artifact_stream(self, reference: str) -> Any:
+        """Read an artifact from storage by its reference and return a binary stream/generator."""
         ...
 
     def verify_artifact(self, reference: str) -> bool:

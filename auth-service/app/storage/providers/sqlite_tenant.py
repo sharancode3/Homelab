@@ -359,3 +359,72 @@ class BaaSAuthRepository:
             except sqlite3.Error as e:
                 conn.execute("ROLLBACK")
                 raise TenantDatabaseError(f"Database error: {str(e)}")
+
+class BaaSStorageRepository:
+    """Manages metadata for BaaS storage files."""
+
+    def __init__(self, factory: SQLiteTenantConnectionFactory):
+        self.factory = factory
+
+    def setup_schema(self, project_id: str) -> None:
+        sql = """
+        CREATE TABLE IF NOT EXISTS _baas_storage_files (
+            id TEXT PRIMARY KEY,
+            filename TEXT NOT NULL,
+            mime_type TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL,
+            checksum TEXT NOT NULL,
+            uploaded_by TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+        with self.factory.connect(project_id) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(sql)
+            conn.execute("COMMIT")
+
+    def insert_file_metadata(self, project_id: str, metadata: Dict[str, Any]) -> None:
+        self.setup_schema(project_id)
+        with self.factory.connect(project_id) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                conn.execute(
+                    "INSERT INTO _baas_storage_files (id, filename, mime_type, size_bytes, checksum, uploaded_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (metadata["id"], metadata["filename"], metadata["mime_type"], metadata["size_bytes"], metadata["checksum"], metadata["uploaded_by"], metadata.get("created_at"))
+                )
+                conn.execute("COMMIT")
+            except sqlite3.Error as e:
+                conn.execute("ROLLBACK")
+                raise TenantDatabaseError(f"Database error: {str(e)}")
+
+    def get_file_metadata(self, project_id: str, file_id: str) -> Dict[str, Any]:
+        self.setup_schema(project_id)
+        with self.factory.connect(project_id) as conn:
+            cursor = conn.execute("SELECT * FROM _baas_storage_files WHERE id = ?", (file_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def delete_file_metadata(self, project_id: str, file_id: str) -> bool:
+        self.setup_schema(project_id)
+        with self.factory.connect(project_id) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                cursor = conn.execute("DELETE FROM _baas_storage_files WHERE id = ?", (file_id,))
+                conn.execute("COMMIT")
+                return cursor.rowcount > 0
+            except sqlite3.Error as e:
+                conn.execute("ROLLBACK")
+                raise TenantDatabaseError(f"Database error: {str(e)}")
+
+    def list_files_metadata(self, project_id: str) -> List[Dict[str, Any]]:
+        self.setup_schema(project_id)
+        with self.factory.connect(project_id) as conn:
+            cursor = conn.execute("SELECT * FROM _baas_storage_files ORDER BY created_at DESC")
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_project_storage_usage(self, project_id: str) -> int:
+        self.setup_schema(project_id)
+        with self.factory.connect(project_id) as conn:
+            cursor = conn.execute("SELECT SUM(size_bytes) as total FROM _baas_storage_files")
+            row = cursor.fetchone()
+            return row["total"] or 0

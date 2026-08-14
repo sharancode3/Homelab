@@ -15,8 +15,10 @@ from app.api.auth_routes import get_auth_service
 from app.api.dependencies import get_user_repository, get_authz_repo, get_baas_project_service
 from app.api.baas_project_routes import router as baas_project_router
 from app.api.baas_auth_routes import router as baas_auth_router, get_baas_auth_service
+from app.api.baas_storage_routes import router as baas_storage_router, get_storage_service
 from app.api.baas_service import BaaSProjectServiceLayer
 from app.api.baas_auth_service import BaaSAuthService
+from app.api.baas_storage_service import BaaSStorageService
 from app.services.email_service import MockEmailProvider
 from app.api.service import APIServiceLayer
 from app.api.auth_service import AuthServiceLayer
@@ -122,12 +124,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     email_provider = MockEmailProvider()
     baas_auth_service = BaaSAuthService(auth_repo=baas_auth_repo, email_provider=email_provider)
 
+    # 11. BaaS Storage Service Layer
+    from app.providers.storage.local_storage import LocalStorageProvider
+    from app.storage.providers.sqlite_tenant import BaaSStorageRepository
+    baas_storage_repo = BaaSStorageRepository(factory=tenant_factory)
+    storage_adapter = LocalStorageProvider(base_dir=config.storage_path)
+    baas_storage_service = BaaSStorageService(storage_repo=baas_storage_repo, storage_adapter=storage_adapter)
+
     app.dependency_overrides[get_api_service] = lambda: api_service
     app.dependency_overrides[get_auth_service] = lambda: auth_service
     app.dependency_overrides[get_user_repository] = lambda: user_repo
     app.dependency_overrides[get_authz_repo] = lambda: authz_repo
     app.dependency_overrides[get_baas_project_service] = lambda: baas_service
     app.dependency_overrides[get_baas_auth_service] = lambda: baas_auth_service
+    app.dependency_overrides[get_storage_service] = lambda: baas_storage_service
 
     yield
 
@@ -170,6 +180,7 @@ app.include_router(router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(baas_project_router, prefix="/api/v1/baas")
 app.include_router(baas_auth_router, prefix="/api/v1/baas/projects")
+app.include_router(baas_storage_router)
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 # Allow browser-based SDK / developer-console access.

@@ -352,11 +352,13 @@ class BackupEngine:
                 "project-metadata",
                 "project-database",
                 "project-storage-manifest",
+                "project-storage-files",
             )
 
         return (
             "project-database-changes",
             "project-storage-manifest",
+            "project-storage-files",
         )
 
     @staticmethod

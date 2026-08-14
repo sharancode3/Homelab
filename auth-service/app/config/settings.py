@@ -13,6 +13,10 @@ class AppSettings:
 
         self.storage_path = os.getenv("PLATFORM_STORAGE_PATH", "/var/lib/auth-service/data")
 
+        # Phase 14.2 Storage Service Limits
+        self.storage_max_file_size_bytes = int(os.getenv("PLATFORM_STORAGE_MAX_FILE_SIZE", 5 * 1024 * 1024))
+        self.storage_max_project_quota_bytes = int(os.getenv("PLATFORM_STORAGE_MAX_PROJECT_QUOTA", 100 * 1024 * 1024))
+
         self.secret_key = os.getenv("PLATFORM_SECRET_KEY", "change-me-in-production")
 
         internal_token = os.getenv("PLATFORM_INTERNAL_API_TOKEN")
