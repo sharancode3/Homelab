@@ -3,7 +3,7 @@ import time
 import os
 import shutil
 
-BASE_URL = "http://localhost:8003/api/v1"
+BASE_URL = "http://localhost:8016/api/v1"
 INTERNAL_TOKEN = "my-secret"
 
 def run_smoke_test():
@@ -170,6 +170,7 @@ def run_smoke_test():
     c_delete_table = httpx.delete(f"{BASE_URL}/baas/projects/{proj_a_id}/tables/tmp_table", headers=headers_c)
     assert c_delete_table.status_code in (401, 403)
 
+
     print("22. Testing Developer Role Restrictions...")
     dev_d = {"username": f"devd_{int(time.time())}", "email": f"devd_{int(time.time())}@test.com", "password": "pass"}
     httpx.post(f"{BASE_URL}/auth/register", json=dev_d)
@@ -216,6 +217,36 @@ def run_smoke_test():
     # Admin cannot remove the last Owner
     remove_owner_res = httpx.delete(f"{BASE_URL}/baas/projects/{proj_a_id}/members/{user_a_id}", headers=headers_b)
     assert remove_owner_res.status_code in (400, 403), f"Should not remove last owner, got {remove_owner_res.status_code}"
+    # 24. Rate Limiting Test
+    print("24. Testing Rate Limiting (150 requests)...")
+    success_count = 0
+    too_many_count = 0
+    
+    with httpx.Client() as client:
+        for _ in range(150):
+            res = client.get(
+                f"{BASE_URL}/baas/projects/{proj_b_id}/data/b_table",
+                headers={"X-Project-API-Key": key_b}
+            )
+            if res.status_code == 200:
+                success_count += 1
+            elif res.status_code == 429:
+                too_many_count += 1
+
+    print(f"    Successes: {success_count}, 429s: {too_many_count}")
+    assert too_many_count > 0, "Rate limit was not triggered!"
+
+    print("    Waiting 1.5 seconds for bucket refill...")
+    time.sleep(1.5)
+    
+    # Should work now
+    res = httpx.get(
+        f"{BASE_URL}/baas/projects/{proj_b_id}/data/b_table",
+        headers={"X-Project-API-Key": key_b}
+    )
+    assert res.status_code == 200, "Did not recover from rate limit!"
+    print("    Refill confirmed.")
+
 
     print("Smoke test PASSED!")
 

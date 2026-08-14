@@ -134,9 +134,20 @@ app = FastAPI(
     debug=config.debug,
 )
 
-from fastapi import Request
+from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 from app.storage.providers.sqlite_tenant import TenantDatabaseError
+from fastapi.exception_handlers import http_exception_handler
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, HTTPException):
+        return await http_exception_handler(request, exc)
+    logger.error("internal_error", f"Unhandled exception: {str(exc)}")
+    return JSONResponse(
+        status_code=500,
+        content={"error": "internal_server_error", "detail": "An unexpected error occurred."},
+    )
 
 @app.exception_handler(TenantDatabaseError)
 async def tenant_database_error_handler(request: Request, exc: TenantDatabaseError):

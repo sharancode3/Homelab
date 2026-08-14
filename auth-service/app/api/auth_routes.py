@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import Depends
+from app.api.rate_limiter import rate_limit_ip
 from app.api.auth_models import UserRegisterRequest, UserLoginRequest, AuthTokenResponse, RefreshRequest, AccessTokenResponse, UserResponse
 from app.api.auth_service import AuthServiceLayer, InvalidCredentialsException, UserAlreadyExistsException, InvalidRefreshTokenException
 from app.identity.models import DeveloperUser
@@ -13,7 +15,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(
     req: UserRegisterRequest, 
-    service: AuthServiceLayer = Depends(get_auth_service)
+    service: AuthServiceLayer = Depends(get_auth_service),
+    _rate_limit: None = Depends(rate_limit_ip)
 ) -> UserResponse:
     try:
         user = service.register(req)
@@ -31,7 +34,8 @@ def register(
 @router.post("/login", response_model=AuthTokenResponse)
 def login(
     req: UserLoginRequest, 
-    service: AuthServiceLayer = Depends(get_auth_service)
+    service: AuthServiceLayer = Depends(get_auth_service),
+    _rate_limit: None = Depends(rate_limit_ip)
 ) -> AuthTokenResponse:
     try:
         return service.login(req)
@@ -41,7 +45,10 @@ def login(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 @router.get("/me", response_model=UserResponse)
-def get_me(current_user: DeveloperUser = Depends(get_current_user)) -> UserResponse:
+def get_me(
+    current_user: DeveloperUser = Depends(get_current_user),
+    _rate_limit: None = Depends(rate_limit_ip)
+) -> UserResponse:
     return UserResponse(
         user_id=current_user.user_id,
         username=current_user.username,
@@ -54,6 +61,7 @@ def get_me(current_user: DeveloperUser = Depends(get_current_user)) -> UserRespo
 def refresh_token(
     req: RefreshRequest,
     service: AuthServiceLayer = Depends(get_auth_service),
+    _rate_limit: None = Depends(rate_limit_ip)
 ) -> AccessTokenResponse:
     """Exchange a valid refresh token for a new access token.
 

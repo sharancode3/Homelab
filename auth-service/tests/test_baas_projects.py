@@ -1,6 +1,7 @@
 import unittest
 from fastapi.testclient import TestClient
 from app.main import app
+from app.api.rate_limiter import rate_limit_ip, rate_limit_api_key
 
 class TestBaaSProjects(unittest.TestCase):
     def create_user_and_login(self, client: TestClient, username: str, email: str, password: str = "password123") -> str:
