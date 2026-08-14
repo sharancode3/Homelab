@@ -1,5 +1,7 @@
 import secrets
 import random
+import secrets
+import hashlib
 from fastapi import HTTPException
 from app.api.baas_models import BaaSProjectCreateRequest, BaaSProjectResponse
 from app.api.models import ProjectRegisterRequest, DeployRequest, BackupRequest, RestoreRequest, OperationResponse, HealthResponse, ValidateResponse
@@ -160,3 +162,39 @@ class BaaSProjectServiceLayer:
                 raise HTTPException(status_code=400, detail="Cannot remove the last owner of the project")
 
         self._authz.remove_member(project_id, target_user_id)
+
+    # API Key Management
+    def _hash_secret(self, secret: str) -> str:
+        return hashlib.sha256(secret.encode('utf-8')).hexdigest()
+
+    def create_api_key(self, project_id: str, name: str, user_id: str) -> dict:
+        key_id = secrets.token_hex(4)
+        secret = secrets.token_hex(16)
+        full_key = f"pk_live_{key_id}_{secret}"
+
+        secret_hash = self._hash_secret(secret)
+        self._authz.create_api_key(key_id, project_id, name, secret_hash, user_id)
+        return {"key_id": key_id, "key": full_key, "name": name}
+
+    def list_api_keys(self, project_id: str) -> list[dict]:
+        keys = self._authz.get_api_keys(project_id)
+        # Format created_at to string if it's a datetime, but SQLite driver might return str or datetime.
+        for k in keys:
+            if not isinstance(k["created_at"], str):
+                k["created_at"] = str(k["created_at"])
+        return keys
+
+    def revoke_api_key(self, project_id: str, key_id: str) -> None:
+        key = self._authz.get_api_key(key_id)
+        if not key or key["project_id"] != project_id:
+            raise HTTPException(status_code=404, detail="API key not found")
+        self._authz.revoke_api_key(project_id, key_id)
+
+    def rotate_api_key(self, project_id: str, key_id: str, user_id: str) -> dict:
+        key = self._authz.get_api_key(key_id)
+        if not key or key["project_id"] != project_id:
+            raise HTTPException(status_code=404, detail="API key not found")
+
+        name = key["name"]
+        self._authz.revoke_api_key(project_id, key_id)
+        return self.create_api_key(project_id, name, user_id)

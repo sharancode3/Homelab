@@ -1,6 +1,7 @@
 from fastapi import Depends, HTTPException, Security, status, Header
 from app.config.settings import config
 import secrets
+import hashlib
 
 try:
     from fastapi.security import OAuth2PasswordBearer
@@ -22,14 +23,14 @@ def get_current_user(
     user_repo = Depends(get_user_repository)
 ) -> DeveloperUser:
     payload = decode_token(token)
-    
+
     if payload.get("token_type") != "access":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token type",
             headers={"WWW-Authenticate": "Bearer"},
         )
-        
+
     email = payload.get("email")
     if not email:
         raise HTTPException(
@@ -37,7 +38,7 @@ def get_current_user(
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-        
+
     user = user_repo.get_by_email(email)
     if not user or not user.is_active:
         raise HTTPException(
@@ -45,7 +46,7 @@ def get_current_user(
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-        
+
     return user
 
 def get_authz_repo():
@@ -88,6 +89,34 @@ def verify_project_access(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have access to this project.",
         )
+
+def verify_project_api_key(
+    project_id: str,
+    x_project_api_key: str = Header(..., alias="X-Project-API-Key"),
+    authz_repo = Depends(get_authz_repo)
+) -> str:
+    # Key format: pk_live_<key_id>_<secret>
+    parts = x_project_api_key.split('_')
+    if len(parts) != 4 or parts[0] != 'pk' or parts[1] != 'live':
+        raise HTTPException(status_code=401, detail="Invalid API key format")
+
+    key_id = parts[2]
+    secret = parts[3]
+
+    key_record = authz_repo.get_api_key(key_id)
+    if not key_record or not key_record["is_active"]:
+        raise HTTPException(status_code=401, detail="Invalid or revoked API key")
+
+    if key_record["project_id"] != project_id:
+        raise HTTPException(status_code=403, detail="API key not valid for this project")
+
+    expected_hash = key_record["secret_hash"]
+    actual_hash = hashlib.sha256(secret.encode('utf-8')).hexdigest()
+
+    if not secrets.compare_digest(expected_hash, actual_hash):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    return project_id
 
 def verify_internal_token(
     x_internal_token: str | None = Header(None, alias="X-Internal-Token")

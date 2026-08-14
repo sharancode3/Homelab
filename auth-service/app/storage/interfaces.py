@@ -47,6 +47,18 @@ class ProjectAuthorizationRepository(Protocol):
     def count_owners(self, project_id: str) -> int:
         ...
 
+    def create_api_key(self, key_id: str, project_id: str, name: str, secret_hash: str, created_by: str) -> None:
+        ...
+
+    def get_api_keys(self, project_id: str) -> list[dict]:
+        ...
+
+    def get_api_key(self, key_id: str) -> dict | None:
+        ...
+
+    def revoke_api_key(self, project_id: str, key_id: str) -> None:
+        ...
+
 
 class AuditRepository(Protocol):
     def append(self, record: AuditRecord) -> None:

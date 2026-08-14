@@ -75,7 +75,53 @@ def get_health(
 ):
     return service.get_health(project_id)
 
-from app.api.baas_models import ProjectMemberResponse, AddMemberRequest, UpdateMemberRoleRequest
+from app.api.baas_models import ProjectMemberResponse, AddMemberRequest, UpdateMemberRoleRequest, ApiKeyCreateRequest, ApiKeyResponse, ApiKeyListResponse
+from app.api.dependencies import verify_project_api_key
+
+@router.get("/{project_id}/data/test", response_model=dict)
+def data_plane_test(
+    project_id: str,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    verified_project_id: str = Depends(verify_project_api_key),
+):
+    return {"status": "success", "project_id": verified_project_id, "message": "Data plane accessed via API key"}
+
+@router.post("/{project_id}/keys", response_model=ApiKeyResponse)
+def create_api_key(
+    project_id: str,
+    req: ApiKeyCreateRequest,
+    user: DeveloperUser = Depends(get_current_user),
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_admin),
+):
+    return service.create_api_key(project_id, req.name, user.user_id)
+
+@router.get("/{project_id}/keys", response_model=list[ApiKeyListResponse])
+def list_api_keys(
+    project_id: str,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_admin),
+):
+    return service.list_api_keys(project_id)
+
+@router.delete("/{project_id}/keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_api_key(
+    project_id: str,
+    key_id: str,
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_admin),
+):
+    service.revoke_api_key(project_id, key_id)
+
+@router.post("/{project_id}/keys/{key_id}/rotate", response_model=ApiKeyResponse)
+def rotate_api_key(
+    project_id: str,
+    key_id: str,
+    user: DeveloperUser = Depends(get_current_user),
+    service: BaaSProjectServiceLayer = Depends(get_baas_project_service),
+    role: str = Depends(require_admin),
+):
+    return service.rotate_api_key(project_id, key_id, user.user_id)
 
 @router.get("/{project_id}/members", response_model=list[ProjectMemberResponse])
 def list_members(

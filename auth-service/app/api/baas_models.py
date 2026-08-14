@@ -32,3 +32,17 @@ class AddMemberRequest(BaseModel):
 
 class UpdateMemberRoleRequest(BaseModel):
     role: ProjectRole
+
+class ApiKeyCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+class ApiKeyResponse(BaseModel):
+    key_id: str
+    key: str  # Only returned on creation
+    name: str
+
+class ApiKeyListResponse(BaseModel):
+    key_id: str
+    name: str
+    created_at: str
+    is_active: bool

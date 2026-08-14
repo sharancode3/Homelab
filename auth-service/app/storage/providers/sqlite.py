@@ -161,7 +161,7 @@ class SQLiteAuditRepository(AuditRepository):
     ) -> list[AuditRecord]:
         query = "SELECT * FROM audit_records WHERE 1=1"
         params = []
-        
+
         if project_id is not None:
             query += " AND target_identity = ?"
             params.append(project_id)
@@ -254,7 +254,7 @@ class SQLiteOperationHistoryRepository(OperationHistoryRepository):
         if project_id is not None:
             query += " WHERE project_id = ?"
             params.append(project_id)
-            
+
         rows = self._conn.execute(query, params).fetchall()
         return [self._row_to_result(row) for row in rows]
 
@@ -354,13 +354,26 @@ class SQLiteProjectAuthorizationRepository(ProjectAuthorizationRepository):
                 project_id TEXT NOT NULL,
                 user_id TEXT NOT NULL,
                 role TEXT NOT NULL,
-                PRIMARY KEY (project_id, user_id)
+                PRIMARY KEY (project_id, user_id),
+                FOREIGN KEY(user_id) REFERENCES users(user_id)
             )
             """
         )
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_member_user_id ON project_members(user_id)"
         )
+        self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS project_api_keys (
+                key_id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                secret_hash TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_active BOOLEAN DEFAULT 1,
+                FOREIGN KEY(project_id) REFERENCES projects(project_id)
+            )
+        """)
         self._conn.commit()
 
     def add_member(self, project_id: str, user_id: str, role: str) -> None:
@@ -425,3 +438,33 @@ class SQLiteProjectAuthorizationRepository(ProjectAuthorizationRepository):
             (project_id,)
         ).fetchone()
         return row["c"] if row else 0
+
+    def create_api_key(self, key_id: str, project_id: str, name: str, secret_hash: str, created_by: str) -> None:
+        self._conn.execute(
+            """INSERT INTO project_api_keys
+               (key_id, project_id, name, secret_hash, created_by, is_active)
+               VALUES (?, ?, ?, ?, ?, 1)""",
+            (key_id, project_id, name, secret_hash, created_by)
+        )
+        self._conn.commit()
+
+    def get_api_keys(self, project_id: str) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT key_id, name, created_at, is_active FROM project_api_keys WHERE project_id = ?",
+            (project_id,)
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_api_key(self, key_id: str) -> dict | None:
+        row = self._conn.execute(
+            "SELECT key_id, project_id, name, secret_hash, is_active FROM project_api_keys WHERE key_id = ?",
+            (key_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def revoke_api_key(self, project_id: str, key_id: str) -> None:
+        self._conn.execute(
+            "UPDATE project_api_keys SET is_active = 0 WHERE project_id = ? AND key_id = ?",
+            (project_id, key_id)
+        )
+        self._conn.commit()
