@@ -170,6 +170,53 @@ def run_smoke_test():
     c_delete_table = httpx.delete(f"{BASE_URL}/baas/projects/{proj_a_id}/tables/tmp_table", headers=headers_c)
     assert c_delete_table.status_code in (401, 403)
 
+    print("22. Testing Developer Role Restrictions...")
+    dev_d = {"username": f"devd_{int(time.time())}", "email": f"devd_{int(time.time())}@test.com", "password": "pass"}
+    httpx.post(f"{BASE_URL}/auth/register", json=dev_d)
+    token_d = httpx.post(f"{BASE_URL}/auth/login", json={"email": dev_d["email"], "password": dev_d["password"]}).json()["access_token"]
+    headers_d = {"Authorization": f"Bearer {token_d}"}
+    user_d_id = httpx.get(f"{BASE_URL}/auth/me", headers=headers_d).json()["user_id"]
+
+    httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/members", json={"email": dev_d["email"], "role": "developer"}, headers=headers_a)
+
+    # Developer CAN read members and project
+    d_read_members = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/members", headers=headers_d)
+    assert d_read_members.status_code == 200, f"Developer should read members, got {d_read_members.status_code}"
+
+    d_read_project = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}", headers=headers_d)
+    assert d_read_project.status_code == 200, f"Developer should read project, got {d_read_project.status_code}"
+
+    d_list_tables = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/tables", headers=headers_d)
+    assert d_list_tables.status_code == 200, f"Developer should list tables, got {d_list_tables.status_code}"
+
+    # Developer CANNOT create table
+    d_create_table = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/tables", json={"name": "dev_hack", "columns": {"id": "TEXT"}}, headers=headers_d)
+    assert d_create_table.status_code in (401, 403), f"Developer should not create table, got {d_create_table.status_code}"
+
+    # Developer CANNOT add members
+    d_add_member = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/members", json={"email": "nobody@test.com", "role": "viewer"}, headers=headers_d)
+    assert d_add_member.status_code in (401, 403), f"Developer should not add member, got {d_add_member.status_code}"
+
+    # Developer CANNOT create API keys
+    d_create_key = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/keys", json={"name": "dev-key"}, headers=headers_d)
+    assert d_create_key.status_code in (401, 403), f"Developer should not create API key, got {d_create_key.status_code}"
+
+    print("23. Testing Member Removal and Access Revocation...")
+    # Admin removes developer D
+    remove_res = httpx.delete(f"{BASE_URL}/baas/projects/{proj_a_id}/members/{user_d_id}", headers=headers_a)
+    assert remove_res.status_code in (200, 204), f"Admin should remove member, got {remove_res.status_code} - {remove_res.text}"
+
+    # Removed developer D now gets 403 on any project route
+    after_remove = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/members", headers=headers_d)
+    assert after_remove.status_code in (401, 403), f"Removed member should be denied, got {after_remove.status_code}"
+
+    after_remove_project = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}", headers=headers_d)
+    assert after_remove_project.status_code in (401, 403), f"Removed member should be denied on project, got {after_remove_project.status_code}"
+
+    # Admin cannot remove the last Owner
+    remove_owner_res = httpx.delete(f"{BASE_URL}/baas/projects/{proj_a_id}/members/{user_a_id}", headers=headers_b)
+    assert remove_owner_res.status_code in (400, 403), f"Should not remove last owner, got {remove_owner_res.status_code}"
+
     print("Smoke test PASSED!")
 
 if __name__ == "__main__":
