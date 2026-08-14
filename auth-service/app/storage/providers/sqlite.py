@@ -9,7 +9,13 @@ from app.platform.operations.models import OperationResult
 from app.project_registry import ProjectRegistryEntry, ProjectStatus, ProjectType
 from app.identity.models import DeveloperUser
 from app.storage.exceptions import DuplicateRecordError, RecordNotFoundError
-from app.storage.interfaces import AuditRepository, OperationHistoryRepository, ProjectRepository, UserRepository
+from app.storage.interfaces import (
+    AuditRepository,
+    OperationHistoryRepository,
+    ProjectAuthorizationRepository,
+    ProjectRepository,
+    UserRepository,
+)
 
 
 class SQLiteProjectRepository(ProjectRepository):
@@ -333,3 +339,54 @@ class SQLiteUserRepository(UserRepository):
             is_active=bool(row["is_active"]),
         )
 
+
+class SQLiteProjectAuthorizationRepository(ProjectAuthorizationRepository):
+    def __init__(self, db_path: str = ":memory:") -> None:
+        self._db_path = db_path
+        self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        self._init_db()
+
+    def _init_db(self) -> None:
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS project_members (
+                project_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                PRIMARY KEY (project_id, user_id)
+            )
+            """
+        )
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_member_user_id ON project_members(user_id)"
+        )
+        self._conn.commit()
+
+    def add_member(self, project_id: str, user_id: str, role: str) -> None:
+        try:
+            self._conn.execute(
+                """
+                INSERT INTO project_members (project_id, user_id, role)
+                VALUES (?, ?, ?)
+                """,
+                (project_id, user_id, role),
+            )
+            self._conn.commit()
+        except sqlite3.IntegrityError:
+            self._conn.rollback()
+            raise DuplicateRecordError(f"User {user_id} is already a member of {project_id}.")
+
+    def get_projects_for_user(self, user_id: str) -> list[str]:
+        rows = self._conn.execute(
+            "SELECT project_id FROM project_members WHERE user_id = ?",
+            (user_id,)
+        ).fetchall()
+        return [row["project_id"] for row in rows]
+
+    def check_access(self, project_id: str, user_id: str) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?",
+            (project_id, user_id)
+        ).fetchone()
+        return row is not None

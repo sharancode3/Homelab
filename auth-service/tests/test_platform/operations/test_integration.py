@@ -43,7 +43,7 @@ if "app.project_registry" not in sys.modules:
 
 def build_project() -> ProjectRegistryEntry:
     return ProjectRegistryEntry(
-        project_id="proj_integration_1",
+        project_id="proj_9999",
         project_name="IntegrationProject",
         project_slug="integration-project",
         project_type=ProjectType.BACKEND,

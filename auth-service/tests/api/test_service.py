@@ -30,7 +30,7 @@ class APIServiceLayerTestCase(unittest.TestCase):
     def test_register_project_creates_lifecycle_state(self) -> None:
         """Test that registering a project also registers it in the lifecycle manager."""
         req = ProjectRegisterRequest(
-            project_id="proj_1",
+            project_id="proj_1111",
             project_name="Test Project",
             project_slug="test-project",
         )
@@ -39,14 +39,14 @@ class APIServiceLayerTestCase(unittest.TestCase):
         
         self.assertEqual(response.status, "success")
         self.mock_registry.register.assert_called_once()
-        self.mock_lifecycle.register.assert_called_once_with("proj_1")
+        self.mock_lifecycle.register.assert_called_once_with("proj_1111")
 
     def test_register_project_ignores_duplicate_lifecycle_safely(self) -> None:
         """Test that a duplicate lifecycle error during registration is handled safely."""
         self.mock_lifecycle.register.side_effect = LifecycleConflictError("already registered")
         
         req = ProjectRegisterRequest(
-            project_id="proj_2",
+            project_id="proj_2222",
             project_name="Duplicate Test",
             project_slug="duplicate-test",
         )
@@ -56,7 +56,7 @@ class APIServiceLayerTestCase(unittest.TestCase):
         
         self.assertEqual(response.status, "success")
         self.mock_registry.register.assert_called_once()
-        self.mock_lifecycle.register.assert_called_once_with("proj_2")
+        self.mock_lifecycle.register.assert_called_once_with("proj_2222")
 
 
     def test_validate_project_advances_lifecycle(self) -> None:
@@ -67,11 +67,11 @@ class APIServiceLayerTestCase(unittest.TestCase):
         mock_val_result.issues = []
         self.mock_validation.validate.return_value = mock_val_result
         
-        response = self.service.validate_project("proj_1")
+        response = self.service.validate_project("proj_1111")
         
         self.assertTrue(response.is_valid)
-        self.mock_lifecycle.validate.assert_called_once_with("proj_1")
-        self.mock_validation.validate.assert_called_once_with("proj_1", "deploy")
+        self.mock_lifecycle.validate.assert_called_once_with("proj_1111")
+        self.mock_validation.validate.assert_called_once_with("proj_1111", "deploy")
 
     def test_validate_project_ignores_duplicate_lifecycle_safely(self) -> None:
         """Test that validating a project already validated doesn't crash."""
@@ -83,11 +83,11 @@ class APIServiceLayerTestCase(unittest.TestCase):
         self.mock_validation.validate.return_value = mock_val_result
         
         # This should not raise an exception
-        response = self.service.validate_project("proj_2")
+        response = self.service.validate_project("proj_2222")
         
         self.assertTrue(response.is_valid)
-        self.mock_lifecycle.validate.assert_called_once_with("proj_2")
-        self.mock_validation.validate.assert_called_once_with("proj_2", "deploy")
+        self.mock_lifecycle.validate.assert_called_once_with("proj_2222")
+        self.mock_validation.validate.assert_called_once_with("proj_2222", "deploy")
 
 
 if __name__ == "__main__":

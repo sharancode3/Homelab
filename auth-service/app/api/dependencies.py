@@ -1,4 +1,6 @@
-from fastapi import Depends, HTTPException, Security, status
+from fastapi import Depends, HTTPException, Security, status, Header
+from app.config.settings import config
+import secrets
 
 try:
     from fastapi.security import OAuth2PasswordBearer
@@ -45,3 +47,29 @@ def get_current_user(
         )
         
     return user
+
+def get_authz_repo():
+    raise NotImplementedError("Dependency should be overridden in app startup.")
+
+def get_baas_project_service():
+    raise NotImplementedError("Dependency should be overridden in app startup.")
+
+def verify_project_access(
+    project_id: str,
+    user: DeveloperUser = Depends(get_current_user),
+    authz_repo = Depends(get_authz_repo)
+) -> None:
+    if not authz_repo.check_access(project_id, user.user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this project.",
+        )
+
+def verify_internal_token(
+    x_internal_token: str | None = Header(None, alias="X-Internal-Token")
+) -> None:
+    if not x_internal_token or not secrets.compare_digest(x_internal_token, config.internal_api_token):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid internal token",
+        )

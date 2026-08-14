@@ -22,6 +22,17 @@ class ProjectRepository(Protocol):
     def get_all(self) -> tuple[ProjectRegistryEntry, ...]:
         ...
 
+class ProjectAuthorizationRepository(Protocol):
+    def add_member(self, project_id: str, user_id: str, role: str) -> None:
+        ...
+
+    def get_projects_for_user(self, user_id: str) -> list[str]:
+        ...
+
+    def check_access(self, project_id: str, user_id: str) -> bool:
+        ...
+
+
 class AuditRepository(Protocol):
     def append(self, record: AuditRecord) -> None:
         ...
@@ -46,12 +57,12 @@ class OperationHistoryRepository(Protocol):
 class UserRepository(Protocol):
     def create(self, user: DeveloperUser) -> None:
         ...
-        
+
     def get_by_user_id(self, user_id: str) -> DeveloperUser | None:
         ...
-        
+
     def get_by_username(self, username: str) -> DeveloperUser | None:
         ...
-        
+
     def get_by_email(self, email: str) -> DeveloperUser | None:
         ...
