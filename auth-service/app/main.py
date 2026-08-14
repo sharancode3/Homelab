@@ -4,12 +4,16 @@ from typing import AsyncGenerator
 from fastapi import FastAPI
 
 from app.api.routes import router
+from app.api.auth_routes import router as auth_router
 from app.config import config
 from app.observability.logger import StructuredLogger
 
 
 from app.api.routes import get_api_service
+from app.api.auth_routes import get_auth_service
+from app.api.dependencies import get_user_repository
 from app.api.service import APIServiceLayer
+from app.api.auth_service import AuthServiceLayer
 from app.platform.audit.engine import AuditEngine
 from app.platform.backup.engine import BackupEngine
 from app.platform.deployment.engine import DeploymentEngine
@@ -25,6 +29,7 @@ from app.storage.providers.sqlite import (
     SQLiteAuditRepository,
     SQLiteOperationHistoryRepository,
     SQLiteProjectRepository,
+    SQLiteUserRepository,
 )
 
 logger = StructuredLogger(component="app_runtime")
@@ -42,6 +47,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     project_repo = SQLiteProjectRepository(db_path="data/projects.db")
     audit_repo = SQLiteAuditRepository(db_path="data/audit.db")
     history_repo = SQLiteOperationHistoryRepository(db_path="data/history.db")
+    user_repo = SQLiteUserRepository(db_path="data/users.db")
     
     # 2. Managers
     registry_manager = ProjectRegistryManager(repository=project_repo)
@@ -88,7 +94,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         health=health_engine
     )
     
+    # 8. Auth Service Layer
+    auth_service = AuthServiceLayer(user_repo=user_repo)
+    
     app.dependency_overrides[get_api_service] = lambda: api_service
+    app.dependency_overrides[get_auth_service] = lambda: auth_service
+    app.dependency_overrides[get_user_repository] = lambda: user_repo
     
     yield
     
@@ -106,6 +117,7 @@ app = FastAPI(
 
 # Register routes
 app.include_router(router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")
 
 
 if __name__ == "__main__":

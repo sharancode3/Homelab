@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from app.platform.audit.enums import AuditCategory
     from app.platform.audit.models import AuditRecord
     from app.platform.operations.models import OperationResult
+    from app.identity.models import DeveloperUser
 
 class ProjectRepository(Protocol):
     def register(self, project: ProjectRegistryEntry) -> None:
@@ -40,4 +41,17 @@ class OperationHistoryRepository(Protocol):
         ...
 
     def get_history(self, project_id: str | None = None) -> list[OperationResult]:
+        ...
+
+class UserRepository(Protocol):
+    def create(self, user: DeveloperUser) -> None:
+        ...
+        
+    def get_by_user_id(self, user_id: str) -> DeveloperUser | None:
+        ...
+        
+    def get_by_username(self, username: str) -> DeveloperUser | None:
+        ...
+        
+    def get_by_email(self, email: str) -> DeveloperUser | None:
         ...

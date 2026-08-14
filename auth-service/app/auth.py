@@ -5,7 +5,7 @@ from jose import JWTError, jwt
 from jose.exceptions import ExpiredSignatureError
 from passlib.context import CryptContext
 
-from app.config import settings
+from app.config import config
 
 pwd_context = CryptContext(
     schemes=["argon2"],
@@ -25,8 +25,8 @@ def decode_token(token: str):
     try:
         return jwt.decode(
             token,
-            settings.SECRET_KEY,
-            algorithms=[settings.ALGORITHM],
+            config.secret_key,
+            algorithms=["HS256"],
         )
     except (ExpiredSignatureError, JWTError):
         raise HTTPException(
@@ -39,7 +39,7 @@ def decode_token(token: str):
 def create_access_token(data: dict):
     return _create_token(
         data=data,
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        expires_delta=timedelta(minutes=30),
         token_type="access",
     )
 
@@ -63,6 +63,6 @@ def _create_token(data: dict, expires_delta: timedelta, token_type: str | None =
 
     return jwt.encode(
         to_encode,
-        settings.SECRET_KEY,
-        algorithm=settings.ALGORITHM,
+        config.secret_key,
+        algorithm="HS256",
     )

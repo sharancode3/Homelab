@@ -7,8 +7,9 @@ from app.platform.audit.models import AuditRecord
 from app.platform.operations.enums import OperationStatus
 from app.platform.operations.models import OperationResult
 from app.project_registry import ProjectRegistryEntry, ProjectStatus, ProjectType
+from app.identity.models import DeveloperUser
 from app.storage.exceptions import DuplicateRecordError, RecordNotFoundError
-from app.storage.interfaces import AuditRepository, OperationHistoryRepository, ProjectRepository
+from app.storage.interfaces import AuditRepository, OperationHistoryRepository, ProjectRepository, UserRepository
 
 
 class SQLiteProjectRepository(ProjectRepository):
@@ -259,3 +260,76 @@ class SQLiteOperationHistoryRepository(OperationHistoryRepository):
             failures=tuple(json.loads(row["failures"])),
             compensation_result=json.loads(row["compensation_result"]),
         )
+
+class SQLiteUserRepository(UserRepository):
+    def __init__(self, db_path: str = ":memory:") -> None:
+        self._db_path = db_path
+        self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        self._init_db()
+
+    def _init_db(self) -> None:
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                user_id TEXT PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                hashed_password TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                is_active INTEGER NOT NULL
+            )
+            """
+        )
+        self._conn.commit()
+
+    def create(self, user: DeveloperUser) -> None:
+        try:
+            self._conn.execute(
+                """
+                INSERT INTO users (
+                    user_id, username, email, hashed_password, created_at, is_active
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user.user_id,
+                    user.username,
+                    user.email,
+                    user.hashed_password,
+                    user.created_at.isoformat(),
+                    1 if user.is_active else 0,
+                ),
+            )
+            self._conn.commit()
+        except sqlite3.IntegrityError:
+            self._conn.rollback()
+            raise DuplicateRecordError(f"User {user.email} or {user.username} already exists.")
+
+    def get_by_user_id(self, user_id: str) -> DeveloperUser | None:
+        row = self._conn.execute("SELECT * FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        if not row:
+            return None
+        return self._row_to_user(row)
+
+    def get_by_username(self, username: str) -> DeveloperUser | None:
+        row = self._conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        if not row:
+            return None
+        return self._row_to_user(row)
+
+    def get_by_email(self, email: str) -> DeveloperUser | None:
+        row = self._conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        if not row:
+            return None
+        return self._row_to_user(row)
+
+    def _row_to_user(self, row: sqlite3.Row) -> DeveloperUser:
+        return DeveloperUser(
+            user_id=row["user_id"],
+            username=row["username"],
+            email=row["email"],
+            hashed_password=row["hashed_password"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+            is_active=bool(row["is_active"]),
+        )
+
