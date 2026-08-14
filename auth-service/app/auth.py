@@ -21,12 +21,16 @@ def verify_password(plain_password: str, hashed_password: str):
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def decode_token(token: str):
+def decode_token(token: str, expected_aud: str | None = None):
     try:
+        kwargs = {}
+        if expected_aud:
+            kwargs["audience"] = expected_aud
         return jwt.decode(
             token,
             config.secret_key,
             algorithms=["HS256"],
+            **kwargs
         )
     except (ExpiredSignatureError, JWTError):
         raise HTTPException(
@@ -36,27 +40,35 @@ def decode_token(token: str):
         )
 
 
-def create_access_token(data: dict):
+def create_access_token(data: dict, aud: str = "developer", project_id: str | None = None):
     return _create_token(
         data=data,
         expires_delta=timedelta(minutes=30),
         token_type="access",
+        aud=aud,
+        project_id=project_id
     )
 
 
-def create_refresh_token(data: dict):
+def create_refresh_token(data: dict, aud: str = "developer", project_id: str | None = None):
     return _create_token(
         data=data,
         expires_delta=timedelta(days=7),
         token_type="refresh",
+        aud=aud,
+        project_id=project_id
     )
 
 
-def _create_token(data: dict, expires_delta: timedelta, token_type: str | None = None):
+def _create_token(data: dict, expires_delta: timedelta, token_type: str | None = None, aud: str = "developer", project_id: str | None = None):
     to_encode = data.copy()
 
     if token_type:
         to_encode["token_type"] = token_type
+
+    to_encode["aud"] = aud
+    if project_id:
+        to_encode["project_id"] = project_id
 
     expire = datetime.now(timezone.utc) + expires_delta
     to_encode.update({"exp": expire})

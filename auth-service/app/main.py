@@ -14,7 +14,10 @@ from app.api.routes import get_api_service
 from app.api.auth_routes import get_auth_service
 from app.api.dependencies import get_user_repository, get_authz_repo, get_baas_project_service
 from app.api.baas_project_routes import router as baas_project_router
+from app.api.baas_auth_routes import router as baas_auth_router, get_baas_auth_service
 from app.api.baas_service import BaaSProjectServiceLayer
+from app.api.baas_auth_service import BaaSAuthService
+from app.services.email_service import MockEmailProvider
 from app.api.service import APIServiceLayer
 from app.api.auth_service import AuthServiceLayer
 from app.platform.audit.engine import AuditEngine
@@ -35,7 +38,7 @@ from app.storage.providers.sqlite import (
     SQLiteUserRepository,
     SQLiteProjectAuthorizationRepository,
 )
-from app.storage.providers.sqlite_tenant import SQLiteTenantConnectionFactory, TenantDatabaseManager
+from app.storage.providers.sqlite_tenant import SQLiteTenantConnectionFactory, TenantDatabaseManager, BaaSAuthRepository
 
 logger = StructuredLogger(component="app_runtime")
 
@@ -114,11 +117,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         tenant_db=tenant_db
     )
 
+    # 10. BaaS Auth Service Layer
+    baas_auth_repo = BaaSAuthRepository(factory=tenant_factory)
+    email_provider = MockEmailProvider()
+    baas_auth_service = BaaSAuthService(auth_repo=baas_auth_repo, email_provider=email_provider)
+
     app.dependency_overrides[get_api_service] = lambda: api_service
     app.dependency_overrides[get_auth_service] = lambda: auth_service
     app.dependency_overrides[get_user_repository] = lambda: user_repo
     app.dependency_overrides[get_authz_repo] = lambda: authz_repo
     app.dependency_overrides[get_baas_project_service] = lambda: baas_service
+    app.dependency_overrides[get_baas_auth_service] = lambda: baas_auth_service
 
     yield
 
@@ -160,6 +169,7 @@ async def tenant_database_error_handler(request: Request, exc: TenantDatabaseErr
 app.include_router(router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(baas_project_router, prefix="/api/v1/baas")
+app.include_router(baas_auth_router, prefix="/api/v1/baas/projects")
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 # Allow browser-based SDK / developer-console access.

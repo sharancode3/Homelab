@@ -3,7 +3,7 @@ import time
 import os
 import shutil
 
-BASE_URL = "http://localhost:8003/api/v1"
+BASE_URL = "http://localhost:8018/api/v1"
 INTERNAL_TOKEN = "my-secret"
 
 def run_smoke_test():
@@ -221,7 +221,7 @@ def run_smoke_test():
     print("24. Testing Rate Limiting (150 requests)...")
     success_count = 0
     too_many_count = 0
-    
+
     with httpx.Client() as client:
         for _ in range(150):
             res = client.get(
@@ -238,7 +238,7 @@ def run_smoke_test():
 
     print("    Waiting 1.5 seconds for bucket refill...")
     time.sleep(1.5)
-    
+
     # Should work now
     res = httpx.get(
         f"{BASE_URL}/baas/projects/{proj_b_id}/data/b_table",
@@ -248,7 +248,28 @@ def run_smoke_test():
     print("    Refill confirmed.")
 
 
-    print("Smoke test PASSED!")
+    print("25. Testing End-User Authentication...")
+    end_user_email = f"enduser_{int(time.time())}@example.com"
+    reg_end_user = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/auth/register", json={
+        "email": end_user_email,
+        "password": "securepassword123"
+    })
+    if reg_end_user.status_code != 201:
+        raise AssertionError(f"Expected 201 on end user reg, got {reg_end_user.status_code} - {reg_end_user.text}")
+
+    login_end_user = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/auth/login", json={
+        "email": end_user_email,
+        "password": "securepassword123"
+    })
+    if login_end_user.status_code != 200:
+        raise AssertionError(f"Expected 200 on end user login, got {login_end_user.status_code}")
+
+    end_user_token = login_end_user.json()["access_token"]
+    me_end_user = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/auth/me", headers={"Authorization": f"Bearer {end_user_token}"})
+    if me_end_user.status_code != 200:
+        raise AssertionError(f"Expected 200 on end user me, got {me_end_user.status_code}")
+
+    print("✅ All smoke-test steps passed successfully!")
 
 if __name__ == "__main__":
     run_smoke_test()

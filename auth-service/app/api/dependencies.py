@@ -22,7 +22,7 @@ def get_current_user(
     token: str = Security(oauth2_scheme),
     user_repo = Depends(get_user_repository)
 ) -> DeveloperUser:
-    payload = decode_token(token)
+    payload = decode_token(token, expected_aud="developer")
 
     if payload.get("token_type") != "access":
         raise HTTPException(

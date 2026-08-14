@@ -71,7 +71,7 @@ class AuthServiceLayer:
         rotated at Phase 12 (no token blacklist yet).
         """
         try:
-            payload = decode_token(req.refresh_token)
+            payload = decode_token(req.refresh_token, expected_aud="developer")
         except Exception:
             raise InvalidRefreshTokenException("Invalid or expired refresh token.")
 

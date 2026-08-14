@@ -28,7 +28,7 @@ class TenantDatabaseValidator:
 
 class SQLiteTenantConnectionFactory:
     """Manages secure, isolated connections to per-project SQLite databases."""
-    
+
     def __init__(self, storage_path: str = None):
         self.base_dir = Path(storage_path or settings.storage_path)
 
@@ -36,7 +36,7 @@ class SQLiteTenantConnectionFactory:
         if not project_id or not IDENTIFIER_REGEX.match(project_id.replace('-', '_')):
             # Ensure project_id itself doesn't contain path traversal characters
             raise TenantDatabaseError("Invalid project_id format")
-        
+
         project_dir = self.base_dir / "projects" / project_id
         project_dir.mkdir(parents=True, exist_ok=True)
         return project_dir / "data.db"
@@ -44,7 +44,7 @@ class SQLiteTenantConnectionFactory:
     @contextmanager
     def connect(self, project_id: str) -> Iterator[sqlite3.Connection]:
         db_path = self._get_project_db_path(project_id)
-        
+
         # Simple lifecycle: open -> configure -> yield -> close
         conn = sqlite3.connect(
             str(db_path),
@@ -52,7 +52,7 @@ class SQLiteTenantConnectionFactory:
             isolation_level=None  # We manage transactions explicitly
         )
         conn.row_factory = sqlite3.Row
-        
+
         try:
             # Enable WAL mode for concurrency
             conn.execute("PRAGMA journal_mode=WAL")
@@ -65,7 +65,7 @@ class SQLiteTenantConnectionFactory:
 
 class TenantDatabaseManager:
     """Provides Control Plane and Data Plane operations for a tenant database."""
-    
+
     def __init__(self, factory: SQLiteTenantConnectionFactory):
         self.factory = factory
         self.MAX_TABLES = 50
@@ -75,7 +75,7 @@ class TenantDatabaseManager:
 
     def create_table(self, project_id: str, table_name: str, columns: Dict[str, str]) -> None:
         TenantDatabaseValidator.validate_identifier(table_name)
-        
+
         if len(columns) > self.MAX_COLUMNS:
             raise TenantDatabaseError(f"Cannot exceed {self.MAX_COLUMNS} columns")
         if len(columns) == 0:
@@ -89,7 +89,7 @@ class TenantDatabaseManager:
             col_type_upper = col_type.upper()
             if col_type_upper not in valid_types:
                 raise TenantDatabaseError(f"Unsupported data type: {col_type}")
-            
+
             # JSON is stored as TEXT in SQLite
             sqlite_type = "TEXT" if col_type_upper == "JSON" else col_type_upper
             col_defs.append(f'"{col_name}" {sqlite_type}')
@@ -127,7 +127,7 @@ class TenantDatabaseManager:
             cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
             if not cursor.fetchone():
                 raise TenantDatabaseError(f"Table {table_name} does not exist")
-                
+
             cursor = conn.execute(f'PRAGMA table_info("{table_name}")')
             return [dict(row) for row in cursor.fetchall()]
 
@@ -144,26 +144,26 @@ class TenantDatabaseManager:
     def add_column(self, project_id: str, table_name: str, column_name: str, column_type: str) -> None:
         TenantDatabaseValidator.validate_identifier(table_name)
         TenantDatabaseValidator.validate_identifier(column_name)
-        
+
         valid_types = {"TEXT", "INTEGER", "REAL", "JSON"}
         col_type_upper = column_type.upper()
         if col_type_upper not in valid_types:
             raise TenantDatabaseError(f"Unsupported data type: {column_type}")
-        
+
         sqlite_type = "TEXT" if col_type_upper == "JSON" else col_type_upper
-        
+
         with self.factory.connect(project_id) as conn:
             # Check table existence
             cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
             if not cursor.fetchone():
                 raise TenantDatabaseError(f"Table {table_name} does not exist")
-                
+
             # Check max columns
             cursor = conn.execute(f'PRAGMA table_info("{table_name}")')
             columns = cursor.fetchall()
             if len(columns) >= self.MAX_COLUMNS:
                 raise TenantDatabaseError(f"Cannot exceed {self.MAX_COLUMNS} columns")
-            
+
             # Check if column already exists
             for col in columns:
                 if col["name"] == column_name:
@@ -196,7 +196,7 @@ class TenantDatabaseManager:
                 conn.execute("BEGIN IMMEDIATE")
                 cursor = conn.execute(sql, values)
                 conn.execute("COMMIT")
-                
+
                 # Try to return the 'id' if provided, otherwise the rowid
                 return str(data.get("id", cursor.lastrowid))
             except sqlite3.Error as e:
@@ -283,6 +283,77 @@ class TenantDatabaseManager:
                         cursor = conn.execute(f'DELETE FROM "{table_name}" WHERE rowid = ?', (row_id,))
                 except sqlite3.OperationalError:
                     cursor = conn.execute(f'DELETE FROM "{table_name}" WHERE rowid = ?', (row_id,))
+                conn.execute("COMMIT")
+                return cursor.rowcount > 0
+            except sqlite3.Error as e:
+                conn.execute("ROLLBACK")
+                raise TenantDatabaseError(f"Database error: {str(e)}")
+
+class BaaSAuthRepository:
+    def __init__(self, factory: SQLiteTenantConnectionFactory):
+        self.factory = factory
+
+    def setup_schema(self, project_id: str) -> None:
+        """Initialize the _baas_auth_users table if it doesn't exist."""
+        sql = """
+        CREATE TABLE IF NOT EXISTS _baas_auth_users (
+            id TEXT PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            hashed_password TEXT NOT NULL,
+            is_verified BOOLEAN DEFAULT 0,
+            verification_token TEXT,
+            reset_token TEXT,
+            token_expires_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+        with self.factory.connect(project_id) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(sql)
+            conn.execute("COMMIT")
+
+    def get_user_by_email(self, project_id: str, email: str) -> Dict[str, Any]:
+        with self.factory.connect(project_id) as conn:
+            cursor = conn.execute("SELECT * FROM _baas_auth_users WHERE email = ?", (email,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def get_user_by_id(self, project_id: str, user_id: str) -> Dict[str, Any]:
+        with self.factory.connect(project_id) as conn:
+            cursor = conn.execute("SELECT * FROM _baas_auth_users WHERE id = ?", (user_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def create_user(self, project_id: str, user_data: Dict[str, Any]) -> str:
+        self.setup_schema(project_id)
+        with self.factory.connect(project_id) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                conn.execute(
+                    "INSERT INTO _baas_auth_users (id, email, hashed_password, is_verified, verification_token, token_expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (user_data["id"], user_data["email"], user_data["hashed_password"],
+                     user_data.get("is_verified", False), user_data.get("verification_token"), user_data.get("token_expires_at"), user_data.get("created_at"))
+                )
+                conn.execute("COMMIT")
+                return user_data["id"]
+            except sqlite3.IntegrityError:
+                conn.execute("ROLLBACK")
+                raise TenantDatabaseError("User with this email already exists")
+            except sqlite3.Error as e:
+                conn.execute("ROLLBACK")
+                raise TenantDatabaseError(f"Database error: {str(e)}")
+
+    def update_user(self, project_id: str, user_id: str, updates: Dict[str, Any]) -> bool:
+        if not updates:
+            return False
+
+        set_clause = ", ".join([f'"{k}" = ?' for k in updates.keys()])
+        values = tuple(updates.values()) + (user_id,)
+
+        with self.factory.connect(project_id) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                cursor = conn.execute(f'UPDATE _baas_auth_users SET {set_clause} WHERE id = ?', values)
                 conn.execute("COMMIT")
                 return cursor.rowcount > 0
             except sqlite3.Error as e:
