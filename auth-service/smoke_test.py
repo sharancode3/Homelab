@@ -39,22 +39,22 @@ def run_smoke_test():
 
     print("5. Generate API Key for Project A1...")
     key_a_res = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/keys", json={"name": "prod-key"}, headers=headers_a)
-    assert key_a_res.status_code == 200
+    assert key_a_res.status_code == 201
     key_a = key_a_res.json()["key"]
 
     print("6. Generate API Key for Project B1...")
     key_b_res = httpx.post(f"{BASE_URL}/baas/projects/{proj_b_id}/keys", json={"name": "prod-key"}, headers=headers_b)
-    assert key_b_res.status_code == 200
+    assert key_b_res.status_code == 201
     key_b = key_b_res.json()["key"]
 
     print("7. JWT (Control Plane) creates a table in Project A1...")
     table_req = {"name": "tmp_table", "columns": {"name": "TEXT", "price": "REAL", "stock": "INTEGER", "tags": "JSON"}}
     create_table_a = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/tables", json=table_req, headers=headers_a)
-    assert create_table_a.status_code == 200, f"Expected 200, got {create_table_a.status_code}"
+    assert create_table_a.status_code == 201, f"Expected 201, got {create_table_a.status_code}"
 
     print("8. JWT (Control Plane) creates a table in Project B1...")
     create_table_b = httpx.post(f"{BASE_URL}/baas/projects/{proj_b_id}/tables", json={"name": "b_table", "columns": {"data": "TEXT"}}, headers=headers_b)
-    assert create_table_b.status_code == 200, f"Expected 200, got {create_table_b.status_code}"
+    assert create_table_b.status_code == 201, f"Expected 201, got {create_table_b.status_code}"
 
     print("9. API Key (Data Plane) Project B reads Project B table...")
     # Using list rows endpoint as default data/table_name reading
@@ -68,7 +68,7 @@ def run_smoke_test():
     print("11. API Key (Data Plane) inserts a row in Project A1...")
     row_data = {"id": "prod_1", "name": "ThinkPad", "price": 1200.00, "stock": 5, "tags": '["laptop", "lenovo"]'}
     insert_row_a = httpx.post(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table", json=row_data, headers={"X-Project-API-Key": key_a})
-    assert insert_row_a.status_code == 200, f"Expected 200, got {insert_row_a.status_code}"
+    assert insert_row_a.status_code == 201, f"Expected 201, got {insert_row_a.status_code}"
 
     print("12. API Key reads the row...")
     get_row_a = httpx.get(f"{BASE_URL}/baas/projects/{proj_a_id}/data/tmp_table/prod_1", headers={"X-Project-API-Key": key_a})

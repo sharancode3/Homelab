@@ -83,7 +83,7 @@ from typing import Dict, Any
 
 # ================== DATA PLANE (API KEY) ==================
 
-@router.post("/{project_id}/data/{table_name}", response_model=RowCreateResponse)
+@router.post("/{project_id}/data/{table_name}", response_model=RowCreateResponse, status_code=status.HTTP_201_CREATED)
 def insert_row(
     project_id: str,
     table_name: str,
@@ -140,7 +140,7 @@ def delete_row(
     service.delete_row(verified_project_id, table_name, row_id)
 
 
-@router.post("/{project_id}/keys", response_model=ApiKeyResponse)
+@router.post("/{project_id}/keys", response_model=ApiKeyResponse, status_code=status.HTTP_201_CREATED)
 def create_api_key(
     project_id: str,
     req: ApiKeyCreateRequest,
@@ -185,7 +185,7 @@ def list_members(
 ):
     return service.list_members(project_id)
 
-@router.post("/{project_id}/members", response_model=ProjectMemberResponse)
+@router.post("/{project_id}/members", response_model=ProjectMemberResponse, status_code=status.HTTP_201_CREATED)
 def add_member(
     project_id: str,
     req: AddMemberRequest,
@@ -215,7 +215,7 @@ def remove_member(
 
 # ================== CONTROL PLANE (TABLE SCHEMA) ==================
 
-@router.post("/{project_id}/tables", response_model=TableResponse)
+@router.post("/{project_id}/tables", response_model=TableResponse, status_code=status.HTTP_201_CREATED)
 def create_table(
     project_id: str,
     req: TableCreateRequest,

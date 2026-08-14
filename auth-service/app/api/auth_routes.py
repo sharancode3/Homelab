@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from app.api.auth_models import UserRegisterRequest, UserLoginRequest, AuthTokenResponse, UserResponse
-from app.api.auth_service import AuthServiceLayer, InvalidCredentialsException, UserAlreadyExistsException
+from app.api.auth_models import UserRegisterRequest, UserLoginRequest, AuthTokenResponse, RefreshRequest, AccessTokenResponse, UserResponse
+from app.api.auth_service import AuthServiceLayer, InvalidCredentialsException, UserAlreadyExistsException, InvalidRefreshTokenException
 from app.identity.models import DeveloperUser
 from app.api.dependencies import get_current_user
 
@@ -48,3 +48,21 @@ def get_me(current_user: DeveloperUser = Depends(get_current_user)) -> UserRespo
         email=current_user.email,
         is_active=current_user.is_active
     )
+
+
+@router.post("/refresh", response_model=AccessTokenResponse)
+def refresh_token(
+    req: RefreshRequest,
+    service: AuthServiceLayer = Depends(get_auth_service),
+) -> AccessTokenResponse:
+    """Exchange a valid refresh token for a new access token.
+
+    Accepts the refresh_token issued at login. Returns a new access_token.
+    The refresh token itself is not rotated (no blacklist at Phase 12).
+    """
+    try:
+        return service.refresh(req)
+    except InvalidRefreshTokenException as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

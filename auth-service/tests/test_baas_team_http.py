@@ -425,12 +425,12 @@ class TestApiKeyManagementRBAC(TeamHttpBase):
     def test_owner_can_create_api_key(self):
         res = self.client.post(self._url("/keys"),
             json={"name": "owner-key"}, headers=self._h(self.owner_token))
-        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.status_code, 201)
 
     def test_admin_can_create_api_key(self):
         res = self.client.post(self._url("/keys"),
             json={"name": "admin-key"}, headers=self._h(self.admin_token))
-        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.status_code, 201)
 
     def test_developer_cannot_create_api_key(self):
         res = self.client.post(self._url("/keys"),

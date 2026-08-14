@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
 from app.api.auth_routes import router as auth_router
@@ -148,6 +149,33 @@ async def tenant_database_error_handler(request: Request, exc: TenantDatabaseErr
 app.include_router(router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(baas_project_router, prefix="/api/v1/baas")
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
+# Allow browser-based SDK / developer-console access.
+# In production, restrict CORS_ALLOWED_ORIGINS to your actual domain(s).
+import os as _os
+_cors_origins_raw = _os.getenv("CORS_ALLOWED_ORIGINS", "*")
+_cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
+_allow_all = _cors_origins == ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"] if _allow_all else _cors_origins,
+    allow_credentials=not _allow_all,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── Platform-level health / readiness endpoint ─────────────────────────────────
+from fastapi import Response as _Response
+
+@app.get("/health", tags=["platform"], include_in_schema=True)
+def platform_health() -> dict:
+    """Unauthenticated readiness probe for load balancers and monitoring.
+
+    Returns 200 when the platform is running.
+    """
+    return {"status": "ok", "version": "1.0.0"}
 
 if __name__ == "__main__":
     import uvicorn
