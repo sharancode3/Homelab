@@ -1,492 +1,1020 @@
 # Homelab / BaaS — Master 25-Phase Roadmap
 
-> **STATUS: ROADMAP CONTROL DOCUMENT**
+> **ROADMAP CONTROL DOCUMENT — SOURCE OF TRUTH**
 >
-> This file is the project-level source of truth for roadmap sequencing and scope. It exists to prevent phase drift, invented features, skipped phases, accidental resequencing, and pulling later-phase functionality into an earlier phase.
+> This document is the permanent roadmap reference for the project. It must be consulted before every phase preflight, implementation plan, implementation, verification, and lock. The purpose is to prevent scope drift, skipped work, invented features, accidental phase reordering, and later-phase functionality bleeding into an earlier phase.
 >
-> **Critical rule:** A phase may not be implemented from assumptions about what a "typical" BaaS should contain. The exact phase definition in this document must be used for preflight, implementation planning, execution, verification, and lock/commit decisions.
+> The roadmap below is based on the approved master roadmap supplied for this project. Where phase numbers have already been deliberately regrouped during execution, the original capability must still be preserved and mapped into the execution backlog rather than silently dropped.
 
 ---
 
-## 0. Non-Negotiable Roadmap Workflow
+# 0. Non-Negotiable Engineering Workflow
 
-Every phase follows this exact pipeline:
+The project does **not** consider a phase complete merely because an agent generated code.
 
-1. **Roadmap definition** — confirm the exact phase and sub-phase scope.
-2. **Read-only preflight** — inspect the repository against that definition only.
-3. **Gap analysis** — separate already-implemented functionality from genuine gaps.
-4. **Boundary audit** — identify anything that would pull functionality from later phases.
-5. **Open decisions** — resolve architecture/security/scope decisions before implementation planning.
-6. **Implementation plan** — produce an explicit file/component/test plan.
-7. **Plan approval** — no implementation before approval.
-8. **Implementation** — implement only the approved scope.
-9. **Verification** — unit/integration/security tests, smoke tests, and diff checks as applicable.
-10. **Review/fixes** — resolve failures before locking.
-11. **Commit + push** — only after verification is green.
-12. **Checkpoint lock** — record commit hash and working-tree state.
-13. **Next phase preflight** — only after the previous phase is locked.
+Every phase follows:
 
-### Absolute scope rules
+**Roadmap definition → Read-only preflight → Gap analysis → Boundary audit → Open decisions → Implementation plan → Explicit approval → Implementation → Tests → Review → Real verification → Fixes → Final verification → Commit + push → Locked checkpoint → Next-phase preflight**
 
-- Never invent a missing roadmap phase.
-- Never infer a phase definition from `ARCHITECTURE_V1.md` when the master roadmap says otherwise.
-- Never merge two phases because functionality appears related.
-- Never skip a phase because its functionality already partially exists; instead, document what was pulled forward and implement only the remaining scope.
-- Never pull Phase N+1/N+2 functionality into Phase N for convenience.
-- Existing functionality may satisfy part of a later phase, but the later phase still needs a preflight against its exact definition.
-- Security fixes required to protect the current phase are allowed; unrelated future architecture is not.
-- Preserve existing security boundaries, tenant isolation, API contracts, and adapter/engine boundaries unless the approved phase explicitly changes them.
+## Mandatory rules
 
----
+1. Confirm the exact phase and sub-phase definition before doing work.
+2. Preflight must be read-only.
+3. Do not infer missing scope from general BaaS conventions.
+4. Identify what already exists before proposing changes.
+5. Separate genuine gaps from already-satisfied requirements.
+6. Explicitly identify Phase N+1/N+2 bleed risks.
+7. Resolve important architecture/security/scope decisions before implementation.
+8. No implementation before the implementation plan is approved.
+9. Implement only the approved scope.
+10. Every meaningful security or reliability fix requires verification.
+11. Do not replace real verification with assumptions or mocked success when real verification is available.
+12. Fix failures before declaring the phase complete.
+13. Run regression verification so earlier phases remain intact.
+14. Run smoke/integration verification where applicable.
+15. `git diff --check` must be clean before lock.
+16. Commit and push only after verification is green.
+17. Record the exact commit hash and clean working-tree state.
+18. Only then begin the next phase preflight.
+19. **We do not skip verification to hit a date.**
+20. At all times, prioritize security, tenant isolation, correctness, efficiency, and the 4 GB ThinkPad constraint.
 
-# 1–10 — Historical / Earlier Roadmap
+## Architecture rules
 
-**IMPORTANT:** The original exact definitions for Phases 1–10 were not recoverable from the current conversation context when this control document was created. The repository contains `docs/PHASE10_ROADMAP.md`, but that is an older Phase 10 conversion roadmap and is **not** to be treated as the 25-phase master roadmap.
-
-Therefore these phases are intentionally **NOT reconstructed or guessed here**.
-
-When the original master roadmap is recovered, replace this section with the exact original titles, sub-phases, scope, exclusions, and dependencies. Until then, do not use assumptions about Phases 1–10 to justify new implementation work.
-
----
-
-# 11 — BaaS Foundation / Developer Platform
-
-## 11.1 — Developer Identity / Authentication
-
-**Status:** LOCKED
-
-Establish the developer identity/authentication foundation used by the BaaS control plane.
-
-## 11.2 — Projects + Ownership + Security Boundary
-
-**Status:** LOCKED — `3908b13`
-
-Establish projects, ownership, project isolation, and the fundamental security boundary between projects and developer identities.
-
-## 11.3 — Team Membership + RBAC
-
-**Status:** LOCKED — `b3d41f6`
-
-Establish project team membership and the four project roles:
-
-- Owner
-- Admin
-- Developer
-- Viewer
-
-Provide role-aware authorization guards and enforce owner invariants, including last-owner protection and prevention of unauthorized owner promotion.
-
-## 11.4 — Project API Keys
-
-**Status:** LOCKED — `28cd995`
-
-Provide project-scoped API key generation, storage/hash handling, listing, revocation/rotation, and IDOR protection.
-
-API keys form the project Data Plane authentication mechanism.
-
-## 11.5 — Database / Tables / Data Service Foundation
-
-**Status:** LOCKED — `a2c2700`
-
-Establish isolated per-project SQLite databases, table management, basic CRUD, pagination, identifier validation, and Data Plane access through project API keys.
-
-## 11.6 — Team Collaboration
-
-**Status:** LOCKED — `5fb81c0`
-
-Complete HTTP-layer RBAC verification for team collaboration and validate role enforcement end-to-end through FastAPI dependency wiring.
-
-Scope includes developer/viewer permissions, member management restrictions, non-member rejection, authentication failures, owner invariants, and member removal/access revocation.
+- Do not casually change established engine boundaries.
+- Prefer adapters/providers at infrastructure boundaries.
+- Preserve API contracts unless the approved phase explicitly changes them.
+- Preserve project isolation at every layer.
+- Preserve explicit authentication → project → resource → operation authorization.
+- Do not introduce heavy infrastructure merely because it is common in production BaaS systems.
+- Redis, message brokers, Prometheus, Grafana, Kubernetes, external load balancers, and similar infrastructure must not appear early merely for convenience; introduce them only in the phase that explicitly requires them.
+- When infrastructure is simulated, report it honestly as simulated rather than fabricating real telemetry.
 
 ---
 
-# 12 — Developer API + SDK / Public BaaS API
+# Roadmap Starting Point
 
-**Status:** LOCKED — `77dccb1`
+- **Phase 9A:** Core Platform Engines — completed.
+- **Phase 10:** Production Architecture — completed.
+- **Phase 10.5:** Real Deployment Smoke Test — completed.
+- **Next:** BaaS product conversion and verification.
 
-Expose and harden the public developer-facing BaaS API foundation.
+The approved master roadmap originally grouped the capabilities broadly as:
 
-Confirmed scope implemented:
+- Phase 11 — BaaS Foundation
+- Phase 12 — Developer API + SDK
+- Phase 13 — Dashboard
+- Phase 14 — Full BaaS Services
+- Phase 15 — Security + Reliability Audit
+- Phase 16 — Real External-App Integration
+- Phase 17 — Production Deployment
+- Phase 18 — Final Verification / Release
 
-- Developer API authentication flow.
-- API-key and JWT authorization boundaries.
-- Public API contract corrections.
-- `POST` resource creation responses using HTTP `201 Created` where required.
-- Developer auth refresh endpoint.
-- CORS middleware with environment-controlled configuration.
-- Platform health endpoint.
-- Existing platform operations exposed only with appropriate RBAC.
-- API-key/Data Plane and developer/control-plane boundaries preserved.
-
-### Explicit boundary
-
-Rate limiting is **not** part of Phase 12 itself. It is Phase 12.5.
+The phase numbers were explicitly allowed to be adjusted if the grouping was improved, provided the dependency/order remained essentially unchanged. Therefore the later execution numbering must be tracked carefully so that **no capability disappears merely because its phase number moved**.
 
 ---
 
-# 12.5 — Rate Limiting
+# PHASE 11 — BaaS FOUNDATION
 
-**Status:** LOCKED — `9ac43dc`
+## Goal
 
-Implement bounded in-memory Token Bucket rate limiting appropriate for the single-node SQLite architecture.
+Turn the existing platform into a **multi-user, multi-project BaaS**.
 
-Confirmed scope:
+### 11.1 — User Account System
 
-- Token Bucket implementation.
-- Bounded/LRU in-memory bucket storage.
-- Control Plane rate limiting keyed by client IP.
-- Data Plane rate limiting keyed by project API key.
-- `429 Too Many Requests` enforcement.
-- `Retry-After` behavior.
-- Correct time-based refill/recovery.
-- HTTP/unit verification and live smoke verification.
+Build:
 
-### Explicit boundary
+- User registration.
+- Login.
+- Logout.
+- Password hashing.
+- Sessions/access tokens.
+- Account identity.
+- User database.
 
-No distributed Redis rate limiter or other Phase 17+ production infrastructure is introduced here.
+Security requirements:
+
+- Argon2id/bcrypt or an appropriately secure password hashing scheme.
+- Never store plaintext passwords.
+- Secure session/token handling.
+- Input validation.
+- Rate limiting on authentication endpoints.
+
+Verification:
+
+- Signup succeeds.
+- Login succeeds.
+- Wrong password is rejected.
+- Unknown-user behavior is safe.
+- Logout succeeds.
+- Expired sessions are rejected.
+
+### 11.2 — Email Verification
+
+Flow:
+
+`Signup → Verification email → User clicks link → Account verified`
+
+Use a free transactional email provider initially, subject to its current free limits.
+
+Security:
+
+- Short-lived verification token.
+- Hash token in database.
+- Single-use token.
+- Never expose token in logs.
+- Resend verification.
+- Prevent email enumeration.
+
+Verification:
+
+- Valid token → verified.
+- Expired token → rejected.
+- Used token → rejected.
+- Modified token → rejected.
+
+### 11.3 — Forgot Password / Reset Password
+
+Flow:
+
+`Forgot password → Enter email → Reset email → Secure reset link → New password → Old reset token invalidated`
+
+Security:
+
+- Cryptographically secure random token.
+- Hashed token storage.
+- Expiration.
+- Single-use.
+- Generic response regardless of account existence.
+- Password re-hashing.
+- Session invalidation after reset where appropriate.
+
+Verification:
+
+- Test the complete reset flow.
+- Test expiry.
+- Test replay.
+- Test modified token.
+- Test enumeration behavior.
+
+### 11.4 — Multiple Projects Per User
+
+Model:
+
+`User → Project A / Project B / Project C`
+
+Each project gets its own:
+
+- Unique identity.
+- Settings.
+- Database.
+- Storage.
+- API keys.
+- Members.
+- Permissions.
+- Deployment configuration.
+
+Critical property:
+
+**Project A must never access Project B.**
+
+Verification:
+
+- Create multiple projects.
+- Aggressively test cross-project access.
+- Test reads, writes, deletion, keys, storage, auth, and deployment boundaries.
+
+### 11.5 — Project Ownership
+
+Relationships:
+
+- Users.
+- Projects.
+- Project members.
+
+Every request must resolve:
+
+`Identity → Project membership → Permission → Resource`
+
+No layer may skip this chain.
+
+### 11.6 — Team Collaboration
+
+Project-specific members.
+
+Initial roles:
+
+- OWNER
+- ADMIN
+- DEVELOPER
+- VIEWER
+
+Permissions must be explicit rather than scattered throughout routes.
+
+Verification:
+
+- Test every role against every sensitive operation.
+- Test non-members.
+- Test owner invariants.
+- Test removal and access revocation.
 
 ---
 
-# 13 — Database / Data Service
+# PHASE 12 — API KEY + DEVELOPER API
 
-**Status:** LOCKED — `99c7535`
+Purpose: allow another developer's application to use the BaaS safely.
 
-Extend the Phase 11.5 database foundation into the planned BaaS database/data-service capabilities without duplicating already-implemented CRUD foundations.
+## 12.1 — Project API Keys
 
-Confirmed Phase 13 implementation scope included:
+Flow:
 
-- Schema alteration support through `ALTER TABLE ... ADD COLUMN`.
-- Strict identifier validation for schema changes.
-- Secure tenant-isolated schema modification.
-- Database security and SQL-injection validation.
-- Reserved SQLite/internal identifier protection.
-- Security testing of malicious identifiers and payloads.
+`Create project → Generate key → Show once → Hash key → Store hash`
 
-### Explicit boundary
+Example format:
 
-Do not pull later-phase relationships, advanced indexing, performance systems, or unrelated infrastructure into this phase unless the exact master roadmap definition explicitly assigns them here.
+`pk_live_xxxxxxxxx`
 
----
+Never store the raw key.
 
-# 14 — BaaS Application Services
+Functions:
 
-Phase 14 is split into four locked sub-phases.
+- Generate.
+- List metadata.
+- Revoke.
+- Rotate.
+- Optional expiration.
+- Permission/scopes where defined by the API contract.
 
-## 14.1 — Developer Authentication Service / End-User Auth
+## 12.2 — API Authentication Middleware
 
-**Status:** LOCKED — `33e4e48`
+External request:
 
-Provide project-scoped end-user authentication while maintaining a cryptographic boundary from developer authentication.
+`Authorization: Bearer pk_live_xxxxx`
 
-Confirmed scope:
+Backend:
 
-- End-user registration/login/refresh.
-- Email verification.
+`API key → Hash → Find key → Find project → Check status → Check permissions → Allow request`
+
+Every step must be project-scoped and fail closed.
+
+## 12.3 — Public BaaS API
+
+Define stable APIs for the product surface, including conceptual areas such as:
+
+- `/v1/auth`
+- `/v1/database`
+- `/v1/storage`
+- `/v1/projects`
+- Other explicitly approved `/v1/...` resources.
+
+Exact routes must be finalized before implementation rather than growing randomly.
+
+## 12.4 — Authorization
+
+Every request must answer:
+
+`Who? → Which project? → Which resource? → Which operation? → Allowed?`
+
+No endpoint may accidentally bypass this chain.
+
+## 12.5 — Rate Limiting
+
+Protect at minimum:
+
+- Login.
+- Signup.
 - Password reset.
-- End-user `/me` access.
-- Explicit JWT `aud="end_user"`.
-- Developer JWTs use `aud="developer"`.
-- Project-bound `project_id` claim.
-- Strict cross-project rejection.
-- Isolated `_baas_auth_users` tenant storage.
-- Injectable email provider with mock provider for tests.
-- Secure verification/reset token generation, hashing, expiry, single-use behavior, and enumeration-safe reset flow.
+- API keys.
+- Data APIs.
+- File uploads.
+- Expensive operations.
+
+The 4 GB ThinkPad makes resource protection especially important.
+
+The initial architecture should remain appropriate for a single-node environment; distributed rate limiting is not introduced merely for fashion.
+
+---
+
+# PHASE 13 — DATABASE / DATA SERVICE
+
+This is a core part of the BaaS product: developers should be able to create tables and use them from their applications.
+
+## 13.1 — Database Project Isolation
+
+Each project requires an isolated data boundary.
+
+Candidate architectures must be evaluated carefully for security and efficiency on the available hardware, e.g.:
+
+`Project A → isolated schema/database`
+
+`Project B → isolated schema/database`
+
+The final architecture must be selected deliberately, not assumed.
+
+## 13.2 — Table Management API
+
+Users can:
+
+- Create table.
+- Delete table.
+- List tables.
+- Add column.
+- Modify allowed schema properties.
+
+## 13.3 — Data API
+
+External applications can perform controlled:
+
+- INSERT
+- SELECT
+- UPDATE
+- DELETE
+
+Conceptual flow:
+
+`Application → API Key → BaaS API → Project authorization → Table authorization → Database`
+
+## 13.4 — Dashboard Data Viewer
+
+Project database view should expose tables such as:
+
+- users
+- products
+- orders
+
+Table viewer capabilities:
+
+- Browse rows.
+- Add row.
+- Edit row.
+- Delete row.
+- Inspect columns.
+
+## 13.5 — Database Security
+
+Must prevent:
+
+- SQL injection.
+- Arbitrary SQL execution.
+- Cross-project queries.
+- Unauthorized table access.
+- Malicious identifiers.
+- Oversized queries.
+- Resource exhaustion.
+
+Verification:
+
+Run deliberate attack/security tests.
+
+---
+
+# PHASE 14 — AUTH + STORAGE + EXISTING PLATFORM SERVICES
+
+Expand the BaaS beyond database functionality.
+
+## 14.1 — Developer Authentication Service
+
+This is different from platform/admin authentication.
+
+Conceptual flow:
+
+`Developer App → BaaS Auth API → Their Project → Their Users`
+
+Functions:
+
+- Sign up.
+- Sign in.
+- Logout.
+- Password reset.
+- Email verification.
+- Sessions/tokens.
+- User management.
+- Password changes.
+
+Project A's users must never appear in Project B.
 
 ## 14.2 — Storage Service
 
-**Status:** LOCKED — `1ed2410`
+Project storage example:
 
-Provide static project-scoped file storage.
+`Project → Storage → profile-images / documents / uploads`
 
-Confirmed scope:
+Required capabilities:
 
 - Upload.
 - Download.
-- List metadata.
 - Delete.
-- Tenant/project isolation.
-- Path traversal protection.
-- 5 MB maximum file size.
-- 100 MB project storage quota.
-- Streaming I/O.
-- File metadata persisted in tenant SQLite storage.
-- Checksum handling.
-- API-key/developer/end-user authorization according to the locked access matrix.
-- Backup manifest integration for storage artifacts.
+- Metadata.
+- Project isolation.
+- File-size limits.
+- Content validation.
+- Storage quotas.
 
-### Explicit exclusions
-
-- Static site hosting.
-- CDN.
-- Edge caching.
-- Media transformation.
-
-These are not to be pulled into 14.2.
+The existing storage adapter/provider should be reused rather than replaced unnecessarily.
 
 ## 14.3 — Deployment Integration
 
-**Status:** LOCKED — `874a107`
+Connect the BaaS product layer to the existing platform engines.
 
-Expose the existing Phase 10.5 platform operation engines through the BaaS Developer API.
-
-Confirmed scope:
+Required product operations:
 
 - Deploy.
 - Stop.
 - Restart.
 - Health.
 - Logs.
-- Existing Backup/Restore operations where already provided by the platform layer.
-- RBAC protection.
-- Project isolation.
-- Logs represented honestly using existing AuditEngine events because real container stdout does not yet exist.
-
-### Explicit exclusions
-
-- CPU/RAM metrics.
-- Prometheus.
-- Grafana.
-- Real-time observability dashboards.
-- Advanced monitoring systems.
-
-Those belong to monitoring/later phases.
+- Backup.
+- Restore.
 
 ## 14.4 — Monitoring
 
-**Status:** LOCKED — `feb33f3`
+Expose appropriate visibility for:
 
-Provide monitoring/visibility appropriate to the simulated platform at this stage.
+- Health.
+- CPU.
+- RAM.
+- Container status.
+- Operation history.
+- Deployment status.
+- Failures.
 
-Confirmed scope:
+Because the host is a 4 GB ThinkPad, resource visibility is important.
 
-- Project status endpoint.
-- Project operation history endpoint.
-- Project-scoped metrics visibility.
-- Internal platform metrics endpoint.
-- Real host CPU/RAM/disk metrics through `psutil`.
-- Real database latency health checks.
-- Storage-path health checks.
-- History result hard cap of 500 records.
-- In-process operation counters, clearly treated as volatile/process-global.
-- Simulated deployment/container status explicitly represented as simulated rather than fabricated as real container telemetry.
-- Strict RBAC and project isolation.
-
-### Explicit exclusions
-
-- Prometheus scrape format.
-- Grafana.
-- Alertmanager/alerting rules.
-- SSE/WebSocket real-time metrics.
-- Performance benchmarking.
-- Monitoring dashboard UI.
-- CDN/load-balancer/ingress metrics.
+Monitoring must be honest about simulated infrastructure: do not fabricate container telemetry when no real container exists.
 
 ---
 
-# 15 — Security + Reliability Audit
+# PHASE 15 — SDK
 
-**Status:** LOCKED — `21e2e02`
+Developers should not have to manually construct HTTP requests.
 
-Harden the existing system against identified security and reliability weaknesses while preserving the existing architecture and avoiding future-phase infrastructure.
+Start with a **Python SDK**.
 
-Confirmed scope:
+Conceptual usage:
 
-### Authentication security
+```python
+from your_sdk import Client
 
-- JWT `jti` issuance.
-- Lightweight SQLite token revocation repository.
-- Explicit logout/revocation.
-- Revocation checks in developer and end-user authentication dependencies.
-- Bounded pruning of expired revocation records.
-- Preservation of `aud` and `project_id` security boundaries.
-- Email enumeration protection.
+client = Client(
+    url="https://your-baas.example",
+    api_key="pk_live_xxxxx"
+)
 
-### Resource/exhaustion safeguards
+client.auth.sign_up(...)
+client.db.table("users").insert(...)
+client.db.table("users").select(...)
+client.storage.upload(...)
+```
 
-- Maximum 50 tables per project.
-- Maximum 50 columns per table.
-- Maximum identifier length of 64 characters.
-- Preserve established payload/pagination contracts.
-- Preserve the Phase 14.2 5 MB file limit and 100 MB project quota.
-- Streamed storage-size enforcement independent of falsified `Content-Length` headers.
-- Filename sanitization/path traversal protection.
+SDK should provide:
 
-### Reliability safeguards
+- Authentication.
+- Database.
+- Storage.
+- Project APIs where appropriate.
+- Error handling.
+- Timeout handling.
+- Retries where safe.
+- Typed responses.
 
-- Controlled SQLite `OperationalError` handling.
-- Controlled filesystem `OSError` handling.
-- Safe `503 Service Unavailable` responses where appropriate.
-- Bounded synchronous email failure handling without background queues.
-- No Redis, broker, or worker infrastructure introduced for this audit.
+Later SDKs:
 
-### Explicit exclusions
+- JavaScript/TypeScript.
+- Flutter.
+- Android.
 
-- Phase 16 dashboard work.
-- Phase 17 production/container infrastructure.
-- Phase 18 full platform hardening such as mTLS/fail2ban/signing-key rotation.
-- Phase 19 deliberate failure campaigns.
-- Phase 20 performance/advanced quota systems.
+Do not build all SDKs at once.
 
----
+### Execution alignment note
 
-# 16 — Dashboard / Developer-Facing Monitoring UI
-
-**Current status:** NEXT PHASE — NOT STARTED
-
-The available locked roadmap references establish Phase 16 as the **Dashboard** phase. The exact original 16.1+ sub-phase definitions are **not currently recoverable** from the original master roadmap.
-
-### Confirmed boundary
-
-Phase 16 must not be started from assumptions. Before implementation:
-
-1. Recover the exact Phase 16.1+ definitions.
-2. Perform a read-only preflight against those definitions.
-3. Identify what Phase 14.4 already provides that the dashboard can consume.
-4. Explicitly exclude Phase 17+ functionality.
-5. Create and approve an implementation plan.
-
-### Known exclusion from prior locked planning
-
-Phase 16 is the developer-facing dashboard/UI layer. It must not become a reason to introduce production deployment infrastructure, real container telemetry, CDN/ingress infrastructure, or performance systems prematurely.
+The project's phase numbering was deliberately regrouped during implementation. Security + Reliability was executed and locked as the current Phase 15. Therefore the **SDK requirement from this master roadmap is not considered deleted**. It remains a required capability and must be explicitly scheduled before the external-application milestone if it has not already been completed.
 
 ---
 
-# 17 — Public Production / Real Runtime Infrastructure
+# PHASE 16 — DASHBOARD / FRONTEND
 
-**Known title/scope reference — NOT YET FULLY RECOVERED**
+The frontend becomes meaningful because the backend product APIs exist.
 
-Prior locked planning identifies Phase 17 as the **Public Prod** phase.
+Recommended initial stack:
 
-Confirmed future-boundary examples from earlier planning:
+- React.
+- Vite.
+- TypeScript.
+- Tailwind.
+- React Query.
 
-- Real production/container constraints.
-- Docker/cgroup resource constraints.
-- Production filesystem restrictions.
-- Real public runtime infrastructure.
+## Dashboard structure
 
-The exact original 17.x sub-phases must be recovered before Phase 17 preflight. Do not infer the remaining details.
+`Dashboard`
 
----
+- Projects
+- Selected Project
+  - Overview
+  - Database
+    - Tables
+    - Data
+  - Authentication
+  - Storage
+  - API Keys
+  - Deployments
+  - Logs
+  - Health
+  - Team
+  - Settings
 
-# 18 — Full Platform Hardening
+## 16.1 — Account UI
 
-**Known title/scope reference — NOT YET FULLY RECOVERED**
+- Login.
+- Signup.
+- Forgot password.
+- Reset password.
+- Verify email.
+- Profile.
 
-Prior locked planning identifies Phase 18 as **Full Hardening**.
+## 16.2 — Project UI
 
-Examples explicitly deferred to this phase in the Phase 15 plan include:
+- Create project.
+- Switch projects.
+- Project settings.
+- Delete project.
 
-- Strict mTLS.
-- fail2ban/IP blocking.
-- JWT signing-key rotation.
-- Broader production security perimeter hardening.
+All project switching must preserve project isolation.
 
-The exact original 18.x sub-phases must be recovered before Phase 18 preflight.
+## 16.3 — Team UI
 
----
+- Invite member.
+- Change role.
+- Remove member.
 
-# 19 — Deliberate Failure / Failure Campaign
+Role operations must use backend RBAC; frontend hiding alone is never a security control.
 
-**Known title/scope reference — NOT YET FULLY RECOVERED**
+## 16.4 — Database UI
 
-Prior locked planning identifies Phase 19 as the **Failure Campaign** phase.
+- Create table.
+- Create columns.
+- Browse data.
+- Insert.
+- Edit.
+- Delete.
 
-Examples explicitly deferred to this phase include deliberate simulation/testing of:
+The UI must use the existing secured APIs rather than directly accessing databases.
 
-- Network partitions.
-- Disk-full conditions.
-- SMTP/email-provider outages.
-- Other controlled infrastructure failure scenarios.
+## 16.5 — API Key UI
 
-The exact original 19.x sub-phases must be recovered before Phase 19 preflight.
+- Generate.
+- Copy once.
+- Revoke.
+- Rotate.
 
----
+Raw API keys must never be displayed again after the intended one-time reveal.
 
-# 20 — Performance / Advanced Quotas
+## 16.6 — Deployment UI
 
-**Known title/scope reference — NOT YET FULLY RECOVERED**
+- Deploy.
+- Status.
+- Health.
+- Logs.
+- Backup.
+- Restore.
 
-Prior locked planning identifies Phase 20 as the **Performance/Quotas** phase.
+### Phase 16 boundary
 
-Examples explicitly deferred to this phase include:
-
-- Dynamic quota tracking.
-- Advanced usage measurement.
-- Concurrent load testing.
-- Performance benchmarking.
-- Per-project performance/throughput analysis.
-
-The exact original 20.x sub-phases must be recovered before Phase 20 preflight.
-
----
-
-# 21–25 — Later Roadmap
-
-The exact original definitions for Phases 21–25 are not currently recoverable from the available project/context material.
-
-**Do not invent these phases.** They remain intentionally unresolved until the original master roadmap is recovered.
-
-When recovered, each phase must be added with:
-
-- Exact title.
-- Exact sub-phase numbering.
-- Goals.
-- Included functionality.
-- Explicit exclusions.
-- Dependencies on earlier phases.
-- Security boundaries.
-- Infrastructure constraints.
-- Verification requirements.
-
----
-
-# Locked Checkpoint Ledger
-
-| Phase | Status | Locked Commit |
-|---|---|---|
-| 11.1 Developer Identity/Auth | LOCKED | — |
-| 11.2 Projects + Ownership | LOCKED | `3908b13` |
-| 11.3 Team Membership + RBAC | LOCKED | `b3d41f6` |
-| 11.4 Project API Keys | LOCKED | `28cd995` |
-| 11.5 Database / Tables / Data | LOCKED | `a2c2700` |
-| 11.6 Team Collaboration | LOCKED | `5fb81c0` |
-| 12 Developer API | LOCKED | `77dccb1` |
-| 12.5 Rate Limiting | LOCKED | `9ac43dc` |
-| 13 Database / Data Service | LOCKED | `99c7535` |
-| 14.1 End-User Auth | LOCKED | `33e4e48` |
-| 14.2 Storage Service | LOCKED | `1ed2410` |
-| 14.3 Deployment Integration | LOCKED | `874a107` |
-| 14.4 Monitoring | LOCKED | `feb33f3` |
-| 15 Security + Reliability Audit | LOCKED | `21e2e02` |
-| 16 Dashboard | NEXT / NOT STARTED | — |
-| 17 Public Prod | NOT STARTED | — |
-| 18 Full Hardening | NOT STARTED | — |
-| 19 Failure Campaign | NOT STARTED | — |
-| 20 Performance / Quotas | NOT STARTED | — |
-| 21 | UNRECOVERED | — |
-| 22 | UNRECOVERED | — |
-| 23 | UNRECOVERED | — |
-| 24 | UNRECOVERED | — |
-| 25 | UNRECOVERED | — |
+Do **not** turn the dashboard phase into production infrastructure. No CDN, public ingress, real production container orchestration, performance testing, or later-phase security campaign unless explicitly required by a reviewed roadmap change.
 
 ---
 
-# Current Project State
+# PHASE 17 — FRONTEND DEPLOYMENT + PUBLIC ACCESS
 
-**Current locked phase:** Phase 15
+Target architecture:
 
-**Current commit:** `21e2e02`
+`INTERNET → Cloudflare → Frontend hosting / Backend API → Cloudflare Tunnel → ThinkPad`
 
-**Next phase:** Phase 16 — Dashboard
+ThinkPad-side services include the application/runtime, database, Docker, and storage as applicable.
 
-**Current rule:** Do not implement Phase 16 until the exact Phase 16 definition is recovered or explicitly re-established and approved.
+The exact hosting arrangement must be confirmed before production deployment.
+
+Critical rule:
+
+**PostgreSQL must not be exposed directly to the public internet.**
+
+Public access must be restricted through the intended gateway/tunnel/access-control architecture.
+
+---
+
+# PHASE 18 — FULL SECURITY HARDENING
+
+Security is not postponed until Phase 18. Security is part of every previous phase.
+
+Phase 18 is the **final adversarial security review**.
+
+## Authentication security tests
+
+- Brute force.
+- Session expiry.
+- Token replay.
+- Reset-token replay.
+- Email enumeration.
+- Password policy.
+- Credential leakage.
+
+## API security tests
+
+- Missing API key.
+- Invalid API key.
+- Revoked API key.
+- Wrong project.
+- Wrong role.
+- Privilege escalation.
+- IDOR.
+- Malformed requests.
+- Oversized payloads.
+- Rate-limit bypass.
+
+## Database security tests
+
+- SQL injection.
+- Cross-project queries.
+- Unauthorized table access.
+- Malicious identifiers.
+- Resource exhaustion.
+
+## Storage security tests
+
+- Path traversal.
+- Unauthorized downloads.
+- Oversized uploads.
+- Malicious filenames.
+- Cross-project file access.
+
+## Container security tests
+
+- Non-root containers.
+- Resource limits.
+- Filesystem restrictions.
+- Exposed ports.
+- Environment secrets.
+- Container-escape assumptions.
+
+Phase 18 must be a review of the complete security perimeter, not an excuse to ignore security earlier.
+
+---
+
+# PHASE 19 — RELIABILITY + FAILURE TESTING
+
+This phase deliberately breaks the system in controlled ways.
+
+Failure scenarios include:
+
+- Database unavailable.
+- Docker unavailable.
+- Network disappears.
+- Container crashes.
+- Storage write fails.
+- Backup fails.
+- Restore fails.
+- Email provider unavailable.
+- API key invalid.
+- Process restarts.
+
+For every controlled failure verify:
+
+- Retry behavior where safe.
+- Recovery.
+- Audit trail.
+- Correct error response.
+- No corrupted state.
+
+The reliability layer established earlier should be exercised here rather than merely inspected.
+
+---
+
+# PHASE 20 — PERFORMANCE + RESOURCE TESTING
+
+The production hardware is a **ThinkPad with 4 GB RAM**, so actual measurements are required before establishing aggressive quotas.
+
+Test progressively:
+
+- 10 projects.
+- 20 projects.
+- 50 projects.
+- 100 projects, only if the hardware can realistically sustain it.
+
+Measure:
+
+- RAM.
+- CPU.
+- Disk.
+- Database size.
+- API latency.
+- Container count.
+- Concurrent requests.
+
+Then establish actual quotas based on measurements.
+
+Examples of possible measured outcomes include:
+
+- Container: 256 MB RAM.
+- Container: 0.25 CPU.
+- Database: measured MB quota.
+- Storage: measured GB quota.
+
+**Do not invent performance limits before measuring.**
+
+---
+
+# PHASE 21 — REAL EXTERNAL APPLICATION TEST
+
+This is a major product milestone.
+
+Use a completely separate external/test application.
+
+Developer workflow:
+
+`Create account`
+→ `Verify email`
+→ `Create project`
+→ `Invite teammate`
+→ `Generate API key`
+→ `Install SDK`
+→ `Connect application`
+→ `Create table`
+→ `Insert data`
+→ `Read data`
+→ `Update data`
+→ `Authentication`
+→ `Upload file`
+→ `Deploy`
+→ `Health`
+→ `Backup`
+→ `Restore`
+
+Then open the dashboard and verify the same resources/data are visible there.
+
+This phase proves that the BaaS works as an external product, not merely as an internal test suite.
+
+---
+
+# PHASE 22 — BUG-FIX / INTEGRATION SPRINT
+
+This phase is deliberately separate from the external-app test.
+
+For every discovered bug:
+
+`Bug → Reproduce → Identify layer → Fix → Unit test → Integration test → Regression test`
+
+No important bug receives a "quick patch" without a regression test.
+
+The objective is to stabilize the complete integrated product after real-world use.
+
+---
+
+# PHASE 23 — PRODUCTION READINESS
+
+## Code
+
+- Remove debug code.
+- Remove dead code.
+- Type checking.
+- Linting.
+- Dependency audit.
+- Environment configuration.
+
+## Security
+
+- Secrets outside repository.
+- Production keys.
+- HTTPS.
+- Secure cookies/tokens.
+- CORS.
+- Rate limiting.
+- Security headers.
+- Logging redaction.
+
+## Database
+
+- Backups.
+- Restore test.
+- Migration strategy.
+- Connection limits.
+- Disk monitoring.
+
+## Docker
+
+- Non-root.
+- Resource limits.
+- Health checks.
+- Restart policy.
+- Image cleanup.
+
+## Cloudflare / public access
+
+- Tunnel.
+- DNS.
+- HTTPS.
+- Access controls.
+- No exposed internal services.
+
+Every production boundary must be explicitly verified.
+
+---
+
+# PHASE 24 — DOCUMENTATION
+
+Developer documentation must cover the complete product journey:
+
+`Getting Started → Create Account → Create Project → Generate API Key → Install SDK → Connect Application`
+
+Then document:
+
+- Authentication API.
+- Database API.
+- Storage API.
+- Deployment API.
+- Backup API.
+- SDK reference.
+- Error codes.
+- Security.
+- Limits.
+
+Internal documentation:
+
+- Architecture.
+- Database design.
+- Deployment.
+- Backups.
+- Recovery.
+- Security model.
+
+Documentation must describe the real implemented behavior, not aspirational behavior.
+
+---
+
+# PHASE 25 — FINAL RELEASE VERIFICATION
+
+This is the final gate.
+
+## User management
+
+- Signup ✅
+- Login ✅
+- Email verification ✅
+- Forgot password ✅
+- Reset password ✅
+- Sessions ✅
+
+## Projects
+
+- Multiple projects ✅
+- Project settings ✅
+- Ownership ✅
+- Team members ✅
+- Roles ✅
+- Isolation ✅
+
+## BaaS
+
+- Database ✅
+- Tables ✅
+- Data API ✅
+- Authentication ✅
+- Storage ✅
+- API keys ✅
+- SDK ✅
+
+## Existing platform
+
+- Deployment ✅
+- Health ✅
+- Backup ✅
+- Restore ✅
+- Audit ✅
+- Reliability ✅
+- Observability ✅
+
+## Security
+
+- Authentication ✅
+- Authorization ✅
+- Tenant isolation ✅
+- API key security ✅
+- Input validation ✅
+- Rate limiting ✅
+- Secrets protection ✅
+- Database security ✅
+- Storage security ✅
+- Container security ✅
+
+## Real-world proof
+
+- External application ✅
+- External developer ✅
+- Team collaboration ✅
+- Real deployment ✅
+- Real database ✅
+- Real storage ✅
+- Real backup/restore ✅
+- Failure recovery ✅
+
+Only when the final gate is satisfied should the product be considered release-ready.
+
+---
+
+# Final Product Architecture Target
+
+```text
+                         YOUR BaaS
+                            │
+                     ┌──────┴──────┐
+                     │             │
+                  Website        SDK/API
+                     │             │
+                     └──────┬──────┘
+                            │
+                      Authentication
+                            │
+                         Projects
+                            │
+             ┌──────────────┼──────────────┐
+             │              │              │
+          Project A      Project B      Project C
+             │              │              │
+        ┌────┼────┐    ┌────┼────┐    ┌────┼────┐
+        │    │    │    │    │    │    │    │    │
+       DB   Auth Storage DB   Auth Storage DB   Auth Storage
+        │
+      Deploy
+        │
+      Backup
+        │
+      Health
+        │
+      Docker
+        │
+     ThinkPad
+```
+
+The finished product is a secure, multi-tenant developer platform in which the website and SDK/API access the same project-scoped services, while each project's DB, Auth, and Storage remain isolated.
+
+---
+
+# Execution Mapping / Current Locked State
+
+The master roadmap allows phase numbers to be adjusted when grouping is improved, but capabilities cannot disappear.
+
+Current locked execution history:
+
+| Execution checkpoint | Capability | Commit | Status |
+|---|---|---|---|
+| 11.1 | Developer Identity/Auth | — | LOCKED |
+| 11.2 | Projects + Ownership | `3908b13` | LOCKED |
+| 11.3 | Team Membership + RBAC | `b3d41f6` | LOCKED |
+| 11.4 | Project API Keys | `28cd995` | LOCKED |
+| 11.5 | Database / Tables / Data | `a2c2700` | LOCKED |
+| 11.6 | Team Collaboration | `5fb81c0` | LOCKED |
+| 12 | Developer API | `77dccb1` | LOCKED |
+| 12.5 | Rate Limiting | `9ac43dc` | LOCKED |
+| 13 | Database / Data Service | `99c7535` | LOCKED |
+| 14.1 | End-User Auth | `33e4e48` | LOCKED |
+| 14.2 | Storage Service | `1ed2410` | LOCKED |
+| 14.3 | Deployment Integration | `874a107` | LOCKED |
+| 14.4 | Monitoring | `feb33f3` | LOCKED |
+| 15 | Security + Reliability Audit | `21e2e02` | LOCKED |
+| 16 | Dashboard / Frontend | — | NEXT |
+
+### Important capability bookkeeping
+
+The original master roadmap placed the Python SDK in Phase 15. During execution, Phase 15 was deliberately used for the Security + Reliability Audit. Therefore the SDK is **not to be forgotten or considered complete merely because the phase number moved**. Before the Real External Application milestone, the SDK must either be implemented and verified or explicitly re-scoped by an approved roadmap decision.
+
+Likewise, Phase 18 remains the final adversarial security review even though security safeguards were already implemented in the current Phase 15 execution. Earlier security work is foundational protection; Phase 18 is the final comprehensive review.
+
+---
+
+# Current Checkpoint
+
+**Locked execution phase:** Phase 15 — Security + Reliability Audit
+
+**Locked commit:** `21e2e02163834c48898d7ae98c93413c01088ee2`
+
+**Next execution phase:** Phase 16 — Dashboard / Frontend
+
+**Phase 16 rule:** Do not implement from assumptions. Use the exact Phase 16 definition above, then perform the normal read-only preflight → gap analysis → boundary audit → decisions → implementation plan → approval → implementation → verification pipeline.
 
 ---
 
 # Roadmap Integrity Rule
 
-This document is intentionally conservative. Where the original master roadmap is known, it records the scope and boundaries. Where it is not known, it explicitly says **UNRECOVERED** instead of manufacturing a plausible roadmap.
+The roadmap is not a suggestion.
 
-The project must never treat a guessed phase as the master roadmap.
+For every future phase, the agent must first compare the requested work against this document and explicitly answer:
 
-If the original roadmap is later recovered, update this file first, review the changes, and only then resume phase execution.
+1. What exact roadmap item is being implemented?
+2. What already exists?
+3. What is genuinely missing?
+4. What is explicitly excluded?
+5. What later-phase functionality must **not** be introduced?
+6. What security/tenant-isolation boundaries must remain intact?
+7. What verification proves the phase is actually complete?
+
+If the answer to any of these is unclear, stop at preflight and ask rather than guessing.
+
+**Most important rule:** We do not skip verification to hit a date. The objective is not merely to finish code. The objective is to turn the existing Phase 9A/10 platform foundation into the secure, multi-tenant developer product envisioned by this roadmap and prove it with a real external application.
