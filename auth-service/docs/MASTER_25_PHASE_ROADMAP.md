@@ -980,7 +980,7 @@ Current locked execution history:
 | 14.4 | Monitoring | `feb33f3` | LOCKED |
 | 15 | Security + Reliability Audit | `21e2e02` | LOCKED |
 | 16 | Dashboard / Frontend | `23715f3` | LOCKED |
-| 17 | Advanced Routing & Production Ingress | — | NEXT |
+| 17 | Advanced Routing & Production Ingress | `edae9ac` | LOCKED |
 
 ### Important capability bookkeeping
 
@@ -992,13 +992,13 @@ Likewise, Phase 18 remains the final adversarial security review even though sec
 
 # Current Checkpoint
 
-**Locked execution phase:** Phase 16 — Dashboard / Frontend
+**Locked execution phase:** Phase 17 — Advanced Routing & Production Ingress
 
-**Locked commit:** `23715f350b62f22807145fa9ee1da4437a73222a`
+**Locked commit:** `edae9acbb8ee2514e3337ff7cda80e02f220f4fb`
 
-**Next execution phase:** Phase 17 — Advanced Routing & Production Ingress
+**Next execution phase:** Phase 18 — Final Verification / Release
 
-**Phase 17 rule:** Do not implement from assumptions. Perform the normal read-only preflight → gap analysis → boundary audit → decisions → implementation plan → approval → implementation → verification pipeline.
+**Phase 18 rule:** Do not implement from assumptions. Perform the normal read-only preflight → gap analysis → boundary audit → decisions → implementation plan → approval → implementation → verification pipeline.
 
 ---
 
