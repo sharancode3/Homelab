@@ -52,12 +52,12 @@ Triggers simulated orchestration workflows against the internal state machine.
 - **Response:** `202 Accepted` + `{ "operation_id": "..." }`
 
 ### `POST /baas/projects/{project_id}/backup`
-Creates a point-in-time snapshot of the SQLite database and storage blobs.
+Initiates a backup operation and tracks the backup manifest lifecycle. Physical byte-level snapshotting of tenant SQLite database and storage blobs is currently simulated.
 - **Response:** `202 Accepted` + `{ "operation_id": "..." }`
 - *Note: To perform a Restore, you must retrieve the `backup_id` from the Operation status after the Backup completes.*
 
 ### `POST /baas/projects/{project_id}/restore`
-Reverts the project state to a specific `backup_id`.
+Initiates a restore operation for a specific `backup_id` and tracks the restore lifecycle through the operation/manifest state. Physical tenant-data restoration is currently simulated.
 - **Body:** `{ "backup_id": "str" }`
 - **Response:** `202 Accepted` + `{ "operation_id": "..." }`
 

@@ -18,8 +18,8 @@ Rather than migrating to heavy infrastructure, the platform uses a strictly veri
 
 ## 3. The Verified Orchestration Boundary
 - **Deployment:** The platform simulates container deployment states via `DockerDeploymentProvider`. It does not physically connect to the Docker socket to spin up containers.
-- **Backups:** The `BackupEngine` creates point-in-time zip archives of a project's SQLite DB and blob directory.
-- **Restores:** The `RestoreEngine` extracts the zip archive, rolling the SQLite state and blob directory back to the exact backup point.
+- **Backups:** The `BackupEngine` currently implements backup operation/manifest metadata orchestration. Physical byte-level backup of tenant SQLite/blob data is currently simulated.
+- **Restores:** The `RestoreEngine` currently implements restore operation/manifest lifecycle orchestration. Physical byte-level restoration of tenant SQLite/blob data is currently simulated.
 - **Health:** The `HealthEngine` continuously monitors SQLite latency (must be <500ms) and host disk availability passively.
 
 ## 4. The API and Security Layer
