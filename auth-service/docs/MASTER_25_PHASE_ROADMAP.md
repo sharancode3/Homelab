@@ -992,13 +992,13 @@ Likewise, Phase 18 remains the final adversarial security review even though sec
 
 # Current Checkpoint
 
-**Locked execution phase:** Phase 20 — PERFORMANCE + RESOURCE TESTING 🔒 LOCKED
+**Locked execution phase:** Phase 21 — REAL EXTERNAL APPLICATION TEST 🔒 LOCKED
 
-**Locked commit:** `8740ce5`
+**Locked commit:** `adcc70d`
 
-**Next execution phase:** Phase 21 — REAL EXTERNAL APPLICATION TEST
+**Next execution phase:** Phase 22 — BUG-FIX / INTEGRATION SPRINT
 
-**Phase 21 rule:** Do not implement from assumptions. Perform the normal read-only preflight → gap analysis → boundary audit → decisions → implementation plan → approval → implementation → verification pipeline.
+**Phase 22 rule:** Do not implement from assumptions. Perform the normal read-only preflight → gap analysis → boundary audit → decisions → implementation plan → approval → implementation → verification pipeline.
 
 ---
 
