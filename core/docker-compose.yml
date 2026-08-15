@@ -30,9 +30,13 @@ services:
 
     env_file:
       - ../auth-service/.env
+      - .env
 
     depends_on:
       - postgres
+
+    volumes:
+      - platform_data:/var/lib/auth-service/data
 
   caddy:
     image: caddy:2
@@ -63,3 +67,4 @@ services:
 volumes:
   postgres_data:
   minio_data:
+  platform_data:

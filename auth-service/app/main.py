@@ -51,13 +51,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("system_startup", f"Starting {config.app_name} in {config.environment} mode.")
 
     import os
-    os.makedirs("data", exist_ok=True)
+    os.makedirs(config.storage_path, exist_ok=True)
 
     # 1. Repositories
-    project_repo = SQLiteProjectRepository(db_path="data/projects.db")
-    audit_repo = SQLiteAuditRepository(db_path="data/audit.db")
-    history_repo = SQLiteOperationHistoryRepository(db_path="data/history.db")
-    user_repo = SQLiteUserRepository(db_path="data/users.db")
+    project_repo = SQLiteProjectRepository(db_path=os.path.join(config.storage_path, "projects.db"))
+    audit_repo = SQLiteAuditRepository(db_path=os.path.join(config.storage_path, "audit.db"))
+    history_repo = SQLiteOperationHistoryRepository(db_path=os.path.join(config.storage_path, "history.db"))
+    user_repo = SQLiteUserRepository(db_path=os.path.join(config.storage_path, "users.db"))
 
     # 2. Managers
     registry_manager = ProjectRegistryManager(repository=project_repo)
@@ -116,8 +116,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     auth_service = AuthServiceLayer(user_repo=user_repo)
 
     # 9. BaaS Service Layer
-    authz_repo = SQLiteProjectAuthorizationRepository(db_path="data/authz.db")
-    tenant_factory = SQLiteTenantConnectionFactory(storage_path="data")
+    authz_repo = SQLiteProjectAuthorizationRepository(db_path=os.path.join(config.storage_path, "authz.db"))
+    tenant_factory = SQLiteTenantConnectionFactory(storage_path=config.storage_path)
     tenant_db = TenantDatabaseManager(factory=tenant_factory)
     # Late-bind tenant_db into health_engine (created before tenant_factory above)
     health_engine._tenant_db = tenant_db
@@ -144,7 +144,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 12. Revocation Repository
     from app.storage.providers.sqlite import SQLiteRevocationRepository
     from app.api.dependencies import get_revocation_repo
-    revocation_repo = SQLiteRevocationRepository(db_path="data/revocations.db")
+    revocation_repo = SQLiteRevocationRepository(db_path=os.path.join(config.storage_path, "revocations.db"))
 
     app.dependency_overrides[get_api_service] = lambda: api_service
     app.dependency_overrides[get_auth_service] = lambda: auth_service

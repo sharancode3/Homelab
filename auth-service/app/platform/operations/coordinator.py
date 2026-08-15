@@ -165,10 +165,10 @@ class PlatformOperationsCoordinator:
 
                 try:
                     self._retry_manager.execute_with_retry(_do_operation)
-                except RetryExhaustedError:
-                    pass
-                except NonRetryableError:
-                    pass
+                except RetryExhaustedError as e:
+                    failures.append(str(e))
+                except NonRetryableError as e:
+                    failures.append(str(e))
                 except Exception as e:
                     failures.append(str(e))
                     self._logger.error(

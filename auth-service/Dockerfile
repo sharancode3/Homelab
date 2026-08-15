@@ -17,8 +17,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY ./app /app/app
 
-# Set ownership
-RUN chown -R appuser:appgroup /app
+# Set ownership for app and storage directories
+RUN chown -R appuser:appgroup /app && \
+    mkdir -p /var/lib/auth-service/data && \
+    chown -R appuser:appgroup /var/lib/auth-service
 
 # Switch to non-root user
 USER appuser
