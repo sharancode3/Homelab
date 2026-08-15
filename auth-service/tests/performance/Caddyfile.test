@@ -1,0 +1,46 @@
+localhost:8080 {
+    root * /var/www/frontend
+
+    handle /api/v1/baas/* {
+        reverse_proxy auth-service:8000
+    }
+    handle /api/v1/auth/* {
+        reverse_proxy auth-service:8000
+    }
+
+    handle /api/v1/platform/* {
+        respond "Forbidden" 403
+    }
+    handle /api/v1/* {
+        respond "Forbidden" 403
+    }
+
+    handle {
+        try_files {path} /index.html
+        file_server
+    }
+}
+
+localhost:8443 {
+    tls internal
+    root * /var/www/frontend
+
+    handle /api/v1/baas/* {
+        reverse_proxy auth-service:8000
+    }
+    handle /api/v1/auth/* {
+        reverse_proxy auth-service:8000
+    }
+
+    handle /api/v1/platform/* {
+        respond "Forbidden" 403
+    }
+    handle /api/v1/* {
+        respond "Forbidden" 403
+    }
+
+    handle {
+        try_files {path} /index.html
+        file_server
+    }
+}
