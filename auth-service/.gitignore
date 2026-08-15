@@ -1,2 +1,8 @@
 data/
 tests/performance/.env.test
+
+# Phase 23 Security Ignores
+.env
+*.sqlite3
+__pycache__/
+*.log

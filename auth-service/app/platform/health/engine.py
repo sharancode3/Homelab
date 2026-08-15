@@ -170,10 +170,25 @@ class HealthEngine:
         exists = os.path.isdir(project_storage)
         writable = os.access(project_storage, os.W_OK) if exists else False
 
+        import shutil
         if exists and writable:
-            state = HealthState.HEALTHY
-            severity = HealthSeverity.INFO
-            details: dict = {"path": project_storage, "writable": True}
+            try:
+                usage = shutil.disk_usage(project_storage)
+                free_mb = usage.free / (1024 * 1024)
+                if free_mb < 100:
+                    state = HealthState.UNHEALTHY
+                    severity = HealthSeverity.CRITICAL
+                elif free_mb < 500:
+                    state = HealthState.DEGRADED
+                    severity = HealthSeverity.WARNING
+                else:
+                    state = HealthState.HEALTHY
+                    severity = HealthSeverity.INFO
+                details: dict = {"path": project_storage, "writable": True, "free_mb": round(free_mb, 2)}
+            except Exception as e:
+                state = HealthState.HEALTHY
+                severity = HealthSeverity.INFO
+                details: dict = {"path": project_storage, "writable": True, "error_checking_disk": str(e)}
         elif exists and not writable:
             state = HealthState.DEGRADED
             severity = HealthSeverity.WARNING
