@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Request, BackgroundTasks
 from app.api.baas_auth_models import (
     EndUserRegisterRequest, EndUserLoginRequest, EndUserTokenResponse,
     EndUserRefreshRequest, EndUserAccessTokenResponse, EndUserResponse,
@@ -55,13 +55,20 @@ def register(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 @router.post("/login", response_model=EndUserTokenResponse)
-def login(
+async def login(
+    request: Request,
     project_id: str,
     req: EndUserLoginRequest,
+    background_tasks: BackgroundTasks,
     auth_service: BaaSAuthService = Depends(get_baas_auth_service)
 ):
+    from app.api.rate_limiter import check_auth_brute_force, clear_auth_brute_force, get_client_ip
+    from fastapi.concurrency import run_in_threadpool
+    await check_auth_brute_force(request, req.email)
     try:
-        return auth_service.login(project_id, req)
+        res = await run_in_threadpool(auth_service.login, project_id, req)
+        background_tasks.add_task(clear_auth_brute_force, get_client_ip(request), req.email)
+        return res
     except InvalidBaaSCredentialsException as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
     except Exception as e:
@@ -93,22 +100,31 @@ def verify_email(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 @router.post("/reset-password-request", status_code=status.HTTP_200_OK)
-def request_password_reset(
+async def request_password_reset(
+    request: Request,
     project_id: str,
     req: EndUserPasswordResetRequest,
     auth_service: BaaSAuthService = Depends(get_baas_auth_service)
 ):
-    auth_service.request_password_reset(project_id, req)
+    from app.api.rate_limiter import check_auth_brute_force
+    from fastapi.concurrency import run_in_threadpool
+    await check_auth_brute_force(request, req.email)
+    await run_in_threadpool(auth_service.request_password_reset, project_id, req)
     return {"status": "success"}
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)
-def reset_password(
+async def reset_password(
+    request: Request,
     project_id: str,
     req: EndUserPasswordResetConfirm,
     auth_service: BaaSAuthService = Depends(get_baas_auth_service)
 ):
+    from app.api.rate_limiter import check_auth_brute_force, get_client_ip
+    from fastapi.concurrency import run_in_threadpool
+    # Email is not known at this stage, so key by IP only for the reset confirm
+    await check_auth_brute_force(request, email=f"reset_confirm_ip_{get_client_ip(request)}")
     try:
-        auth_service.reset_password(project_id, req)
+        await run_in_threadpool(auth_service.reset_password, project_id, req)
         return {"status": "success"}
     except InvalidBaaSCredentialsException as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

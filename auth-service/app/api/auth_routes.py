@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi import Depends
-from app.api.rate_limiter import rate_limit_ip
+from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
+from fastapi.concurrency import run_in_threadpool
+from app.api.rate_limiter import rate_limit_ip, check_auth_brute_force, clear_auth_brute_force, get_client_ip
 from app.api.auth_models import UserRegisterRequest, UserLoginRequest, AuthTokenResponse, RefreshRequest, AccessTokenResponse, UserResponse
 from app.api.auth_service import AuthServiceLayer, InvalidCredentialsException, UserAlreadyExistsException, InvalidRefreshTokenException
 from app.identity.models import DeveloperUser
@@ -32,13 +32,18 @@ def register(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 @router.post("/login", response_model=AuthTokenResponse)
-def login(
+async def login(
+    request: Request,
     req: UserLoginRequest, 
+    background_tasks: BackgroundTasks,
     service: AuthServiceLayer = Depends(get_auth_service),
     _rate_limit: None = Depends(rate_limit_ip)
 ) -> AuthTokenResponse:
+    await check_auth_brute_force(request, req.email)
     try:
-        return service.login(req)
+        res = await run_in_threadpool(service.login, req)
+        background_tasks.add_task(clear_auth_brute_force, get_client_ip(request), req.email)
+        return res
     except InvalidCredentialsException as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
     except Exception as e:

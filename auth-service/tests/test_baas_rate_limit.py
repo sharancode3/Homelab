@@ -16,7 +16,7 @@ class TestRateLimiter(unittest.IsolatedAsyncioTestCase):
             await limiter.check("test_key")
             
         self.assertEqual(context.exception.status_code, 429)
-        self.assertEqual(context.exception.headers.get("Retry-After"), "1")
+        self.assertEqual(context.exception.headers.get("Retry-After"), "60")
         
     async def test_rate_limit_refill(self):
         limiter = InMemoryRateLimiter(capacity=2, refill_rate=10.0) # 10 tokens per second
