@@ -122,11 +122,13 @@ class PlatformOperationsCoordinator:
             failures = []
             completed_steps = []
             
+            result_payload = {}
             with default_registry.measure_duration(f"operation_{operation_type.value}_duration"):
                 def _do_operation():
-                    nonlocal completed_steps, failures
+                    nonlocal completed_steps, failures, result_payload
                     completed_steps.clear()
                     failures.clear()
+                    result_payload.clear()
                     
                     if operation_type == OperationType.DEPLOY:
                         configuration = kwargs.get("configuration", {})
@@ -140,7 +142,10 @@ class PlatformOperationsCoordinator:
                     elif operation_type == OperationType.BACKUP:
                         res = self._backup_engine.backup(project_id=project_id, requested_by=requested_by)
                         completed_steps.append("backup")
-                        if not res.success: failures.append(res.message)
+                        if not res.success:
+                            failures.append(res.message)
+                        elif res.manifest:
+                            result_payload["backup_id"] = res.manifest.backup_id
                     elif operation_type == OperationType.RESTORE:
                         backup_id = kwargs.get("backup_id", "")
                         res = self._restore_engine.restore(project_id=project_id, backup_id=backup_id, requested_by=requested_by)
@@ -237,6 +242,7 @@ class PlatformOperationsCoordinator:
                 status=status,
                 completed_steps=tuple(completed_steps),
                 failures=tuple(failures),
+                result=result_payload,
             )
             
             self._history_repository.save_result(result, project_id)

@@ -113,6 +113,7 @@ class APIServiceLayer:
             status=res.status.value,
             completed_steps=list(res.completed_steps),
             failures=list(res.failures),
+            result=res.result,
         )
 
     def backup_project(self, project_id: str, req: BackupRequest) -> OperationResponse:
@@ -130,6 +131,7 @@ class APIServiceLayer:
             status=res.status.value,
             completed_steps=list(res.completed_steps),
             failures=list(res.failures),
+            result=res.result,
         )
 
     def restore_project(self, project_id: str, req: RestoreRequest) -> OperationResponse:
@@ -147,6 +149,7 @@ class APIServiceLayer:
             status=res.status.value,
             completed_steps=list(res.completed_steps),
             failures=list(res.failures),
+            result=res.result,
         )
 
     def get_health(self, project_id: str) -> HealthResponse:
@@ -173,6 +176,7 @@ class APIServiceLayer:
             status=res.status.value,
             completed_steps=list(res.completed_steps),
             failures=list(res.failures),
+            result=res.result,
         )
 
     def restart_project(self, project_id: str, req: RestartRequest) -> OperationResponse:
@@ -189,6 +193,7 @@ class APIServiceLayer:
             status=res.status.value,
             completed_steps=list(res.completed_steps),
             failures=list(res.failures),
+            result=res.result,
         )
 
     def get_project_logs(self, project_id: str, limit: int = 100) -> LogsResponse:
@@ -249,6 +254,7 @@ class APIServiceLayer:
                 status=r.status.value,
                 completed_steps=list(r.completed_steps),
                 failures=list(r.failures),
+                result=r.result,
             )
             for r in results
         ]

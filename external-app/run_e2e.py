@@ -129,15 +129,23 @@ def run_e2e_workflow():
     print("15. Backup Project...")
     try:
         backup_res = client_dev.projects.backup(project_id)
-        backup_id = backup_res.get('operation_id', "unknown_op")
-        print(f"   Backup triggered successfully. Operation: {backup_id}")
+        backup_op_id = backup_res.get('operation_id', "unknown_op")
+        print(f"   Backup triggered successfully. Operation: {backup_op_id}")
 
         # Verify Backup terminal state
-        op_final = wait_for_operation(client_dev, project_id, backup_id)
-        if op_final:
-            print(f"   [Verified] Backup Operation reached terminal state: {op_final.get('status')}")
-        else:
-            print(f"   [Warning] Backup Operation did not reach terminal state in time.")
+        op_final = wait_for_operation(client_dev, project_id, backup_op_id)
+        if not op_final or op_final.get('status') != 'completed':
+            raise Exception(f"Backup did not complete successfully. State: {op_final}")
+
+        print(f"   [Verified] Backup Operation reached terminal state: {op_final.get('status')}")
+
+        # Extract the real identifier from history result
+        backup_id = op_final.get("result", {}).get("backup_id")
+        if not backup_id or not backup_id.startswith("bkp_"):
+            raise ValueError(f"Invalid or missing backup_id in result: {op_final.get('result')}")
+
+        print(f"   [Verified] Extracted valid backup identifier: {backup_id}")
+
     except Exception as e:
         print(f"   [Failure] Backup: {e}")
         backup_id = None
@@ -153,6 +161,8 @@ def run_e2e_workflow():
             op_final = wait_for_operation(client_dev, project_id, restore_op_id)
             if op_final:
                 print(f"   [Verified] Restore Operation reached terminal state: {op_final.get('status')}")
+                if op_final.get('status') != 'completed':
+                    print(f"   [Failure] Restore did not complete. Failures: {op_final.get('failures')}")
             else:
                 print(f"   [Warning] Restore Operation did not reach terminal state in time.")
         except Exception as e:
