@@ -68,7 +68,7 @@ The approved master roadmap originally grouped the capabilities broadly as:
 - Phase 15 — Security + Reliability Audit
 - Phase 16 — Real External-App Integration
 - Phase 17 — Production Deployment
-- Phase 18 — Final Verification / Release
+- Phase 18 — Final Verification / Release 🔒 LOCKED
 
 The phase numbers were explicitly allowed to be adjusted if the grouping was improved, provided the dependency/order remained essentially unchanged. Therefore the later execution numbering must be tracked carefully so that **no capability disappears merely because its phase number moved**.
 
@@ -992,13 +992,13 @@ Likewise, Phase 18 remains the final adversarial security review even though sec
 
 # Current Checkpoint
 
-**Locked execution phase:** Phase 17 — Advanced Routing & Production Ingress
+**Locked execution phase:** Phase 18 — Final Verification / Release 🔒 LOCKED
 
-**Locked commit:** `edae9acbb8ee2514e3337ff7cda80e02f220f4fb`
+**Locked commit:** `2bd7f15b34a8c1e73706872fab9cfa8995d9682e`
 
-**Next execution phase:** Phase 18 — Final Verification / Release
+**Next execution phase:** Phase 19 — RELIABILITY + FAILURE TESTING
 
-**Phase 18 rule:** Do not implement from assumptions. Perform the normal read-only preflight → gap analysis → boundary audit → decisions → implementation plan → approval → implementation → verification pipeline.
+**Phase 19 rule:** Do not implement from assumptions. Perform the normal read-only preflight → gap analysis → boundary audit → decisions → implementation plan → approval → implementation → verification pipeline.
 
 ---
 
