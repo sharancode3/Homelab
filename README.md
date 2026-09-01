@@ -1,18 +1,18 @@
 # Homelab Platform Orchestrator & Backend-as-a-Service (BaaS)
 
-A self-hosted, multi-tenant developer platform and Backend-as-a-Service engineered specifically for resource-constrained edge environments (single-node 4 GB RAM hardware). Built from first principles to deliver robust tenant isolation, modular orchestration engines, relational database provisioning, local object storage, multi-role RBAC, and an external Python SDK with a strict 256 MB memory envelope.
+A self-hosted, multi-tenant developer platform and Backend-as-a-Service engineered specifically for resource-constrained edge environments (single-node 4 GB RAM hardware). Built from first principles to deliver robust physical tenant isolation, modular deterministic orchestration engines, relational database provisioning, local object storage, multi-role RBAC, and an external Python SDK with a strict 256 MB memory envelope.
 
 ---
 
 ## System Overview
 
-| Parameter | Specification |
+| Parameter | Technical Specification |
 |---|---|
 | Platform Architecture | Three-Plane Engine/Adapter/Coordinator Model |
 | Target Host Constraint | Single-Node Edge Host (4 GB RAM, 2 Cores) |
 | Orchestrator Memory Limit | Strict 256 MB RAM Constraint (`docker-compose.yml`) |
 | Control & Management API | FastAPI (Python 3.10+) with Pydantic Schema Validation |
-| Management Dashboard | React 18, TypeScript, Vite, Tailwind CSS SPA |
+| Management Dashboard | React 18, TypeScript, Vite, Tailwind CSS Single-Page Application |
 | Edge Ingress & Gateway | Caddy 2 Reverse Proxy with Cloudflare Zero Trust Tunnel |
 | Tenant Isolation Model | Dedicated Per-Project SQLite Database (WAL Mode) & Partitioned Blob Storage |
 | Authentication Planes | Developer Management JWT, Project API Key, Project End-User Pool JWT |
@@ -22,157 +22,119 @@ A self-hosted, multi-tenant developer platform and Backend-as-a-Service engineer
 
 ---
 
-## Architectural Principles
+## 1. Visual System Blueprints & Core Architectures
 
-1. **Strict Three-Plane Isolation:** The system isolates the Management Plane (developer administration, project creation, member RBAC), the Data Plane (database rows, file blobs via API keys), and the End-User Identity Plane (project-isolated consumer users).
-2. **Deterministic Embedded Persistence:** Heavy, multi-gigabyte broker and database dependencies (e.g., standalone PostgreSQL/Redis clusters) are eliminated in favor of high-performance, per-tenant SQLite databases configured with Write-Ahead Logging (WAL), busy timeout handlers, and dedicated local directory sandboxes.
-3. **Resilient Engine/Coordinator Pattern:** Operational workflows (deployment lifecycle, backups, restores, health inspections, validation) are isolated in dedicated engines managed by a centralized `PlatformOperationsCoordinator` enforcing mutual exclusion locks and idempotency per project.
-4. **Defense in Depth & Rate Limiting:** All inbound network traffic passes through multi-layered Token Bucket rate limiters (per-IP, per-API-Key, and anti-brute-force identity buckets), application-level security headers, path sanitization, and SQL identifier whitelisting.
-5. **Verified Hardware Safety Margins:** Validated under continuous monitoring up to 100 concurrent tenant projects and 1,410 burst requests on 4 GB RAM hardware with zero OOM events, zero 5xx server errors, zero lockouts, and an 84.5 ms p50 latency baseline.
+Homelab unifies edge reverse proxy routing, multi-tenant database sandboxing, deterministic operational state machines, and multi-plane cryptographic identity. Below are the authoritative architectural blueprints powering the platform:
 
 ---
 
-## Architecture Diagrams
-
-### 1. High-Level Edge Ingress and Network Topology
+### Blueprint 1: End-to-End Platform Architecture & Ingress Matrix
 
 ```mermaid
 graph TD
-    subgraph Public Internet
-        DevClient[Developer / Browser]
-        ExtApp[External Application / Python SDK]
-        EndUser[End Consumer]
+    subgraph Layer1 ["1. Client & External Ingress Layer"]
+        WebConsole["Developer Web Console<br/>(React 18 / TypeScript / Tailwind SPA)"]
+        ExtClient["External Applications<br/>(Python SDK / homelab_sdk Client)"]
+        ConsumerApp["End-User Client Apps<br/>(Mobile / Web Consumer Endpoints)"]
+        DevOpsCLI["Automation & CLI Tools<br/>(Management & Verification Scripts)"]
     end
 
-    subgraph Edge Security & Ingress
-        CFTunnel[Cloudflare Zero Trust Tunnel]
-        Caddy[Caddy 2 Reverse Proxy Gateway]
+    subgraph Layer2 ["2. Edge Security, Ingress & Public Perimeter"]
+        CFTunnel["Cloudflare Zero Trust Tunnel<br/>(Encrypted WireGuard Ingress)"]
+        CaddyProxy["Caddy 2 Reverse Proxy Gateway<br/>• TLS Termination<br/>• Static SPA File Server (/var/www/frontend)<br/>• Dynamic Proxy to Backend (:8000)<br/>• Explicit 403 Block on /api/v1/platform/*"]
     end
 
-    subgraph Homelab Host [Single-Node ThinkPad - 4 GB RAM]
-        StaticSPA[React 18 / Vite Dashboard SPA]
-        Orchestrator[FastAPI Platform Orchestrator - 256MB Cap]
-        
-        subgraph Data Storage Directory [/var/lib/auth-service/data]
-            CoordDB[(Coordination & Auth DBs)]
-            
-            subgraph Project A Directory
-                ProjADB[(Project A SQLite DB)]
-                ProjABlobs[Project A File Storage]
+    subgraph Layer3 ["3. Global Protection, Middleware & Rate Limiting"]
+        SecHeaders["Security Headers Middleware<br/>• X-Content-Type-Options: nosniff<br/>• X-Frame-Options: DENY"]
+        RateLimiters["Token Bucket Rate Limiting Engine<br/>• IP Control Plane: 100 req / 10s burst<br/>• API Key Data Plane: 100 req / 10s burst<br/>• Auth Brute-Force: 10 burst, 1/min refill"]
+        CORSPolicy["CORS Middleware Policy<br/>• Configurable Allowed Origins<br/>• Preflight Options Handling"]
+        TracingEnv["Structured Logger & Tracing<br/>• Correlation ID Injection (corr_*)<br/>• Request Telemetry & Metric Scopes"]
+    end
+
+    subgraph Layer4 ["4. Public API & Routing Controllers (FastAPI)"]
+        AuthRoutes["Auth Controller (/api/v1/auth/*)<br/>• Developer Register / Login<br/>• OAuth2 Password Bearer"]
+        BaaSProjRoutes["BaaS Projects Controller (/api/v1/baas/projects/*)<br/>• Project CRUD & Metadata<br/>• Tables & Schema Engine<br/>• Row Parameterized CRUD<br/>• Team Members & API Keys"]
+        BaaSAuthRoutes["BaaS Auth Controller (/api/v1/baas/projects/{id}/auth/*)<br/>• End-User Register / Login<br/>• Token Refresh & Email Verification"]
+        BaaSStorageRoutes["BaaS Storage Controller (/api/v1/baas/projects/{id}/storage/*)<br/>• Multipart Upload (5MB limit)<br/>• Streaming Chunked Download"]
+        HealthRoutes["Platform Health Controller (/api/v1/health/platform)<br/>• SQLite Latency Probe (<500ms)<br/>• Host Disk Space Capacity Check"]
+    end
+
+    subgraph Layer5 ["5. Service Coordination & Orchestration Layer"]
+        APIService["APIServiceLayer<br/>Internal API Translation"]
+        BaaSService["BaaSProjectServiceLayer<br/>RBAC & Database Governance"]
+        BaaSAuthService["BaaSAuthService<br/>End-User Pool Manager"]
+        BaaSStorageService["BaaSStorageService<br/>Quota & Storage Governance"]
+        Coordinator["PlatformOperationsCoordinator<br/>• Thread-Safe Mutex Locks (_active_operations)<br/>• Operation ID Generation (op_*)<br/>• Workflow Dispatching & Retry Management"]
+    end
+
+    subgraph Layer6 ["6. Deterministic Operational Engines"]
+        LifecycleEng["LifecycleManager<br/>State Transitions"]
+        ValidationEng["ValidationEngine<br/>Preflight Checks"]
+        DeploymentEng["DeploymentEngine<br/>Lifecycle Orchestrator"]
+        BackupEng["BackupEngine<br/>Manifest Generator"]
+        RestoreEng["RestoreEngine<br/>Manifest Validator"]
+        HealthEng["HealthEngine<br/>Probes & Telemetry"]
+        AuditEng["AuditEngine<br/>Immutable Logger"]
+        EventEng["EventEngine<br/>Sync Event Bus & DLQ"]
+    end
+
+    subgraph Layer7 ["7. Infrastructure Adapters & Connection Factories"]
+        DockerAdapter["DockerDeploymentProvider<br/>Container State Engine"]
+        LocalStorageAdapter["LocalStorageProvider<br/>Sandboxed Blob Handler"]
+        TenantConnFactory["SQLiteTenantConnectionFactory<br/>• Per-Project data.db Routing<br/>• PRAGMA journal_mode=WAL<br/>• 5000ms Busy Timeout"]
+        TenantDBManager["TenantDatabaseManager<br/>• Parameterized Queries<br/>• Identifier Regex Enforcement"]
+    end
+
+    subgraph Layer8 ["8. Multi-Tenant Data Persistence Layer (/var/lib/auth-service/data)"]
+        subgraph CentralMetadata ["Shared Coordination & Security Datastores"]
+            UsersDB[("users.db<br/>Developer Accounts & Hashes")]
+            AuthzDB[("authz.db<br/>Team RBAC & API Key Digests")]
+            ProjectsDB[("projects.db<br/>Project Registry & States")]
+            AuditDB[("audit.db<br/>Immutable Audit Records")]
+            HistoryDB[("history.db<br/>Operation Plans & Runs")]
+            RevocationsDB[("revocations.db<br/>JWT JTI Denylist")]
+        end
+
+        subgraph TenantSandboxes ["Isolated Per-Tenant Sandboxes"]
+            subgraph TenantA ["projects/proj_alpha/"]
+                AlphaDB[("data.db<br/>Tables, Rows & Users")]
+                AlphaStorage["storage/<br/>File Blobs & Attachments"]
             end
-            
-            subgraph Project B Directory
-                ProjBDB[(Project B SQLite DB)]
-                ProjBBlobs[Project B File Storage]
+            subgraph TenantB ["projects/proj_beta/"]
+                BetaDB[("data.db<br/>Tables, Rows & Users")]
+                BetaStorage["storage/<br/>File Blobs & Attachments"]
             end
         end
     end
 
-    DevClient -->|HTTPS / WSS| CFTunnel
-    ExtApp -->|HTTPS API Requests| CFTunnel
-    EndUser -->|HTTPS Auth / Data| CFTunnel
-
-    CFTunnel -->|Encrypted Host Pipe| Caddy
-    Caddy -->|/ | StaticSPA
-    Caddy -->|/api/v1/baas/*| Orchestrator
-    Caddy -->|/api/v1/auth/*| Orchestrator
-    Caddy -.->|Block /api/v1/platform/*| Caddy
-
-    Orchestrator --> CoordDB
-    Orchestrator --> ProjADB
-    Orchestrator --> ProjABlobs
-    Orchestrator --> ProjBDB
-    Orchestrator --> ProjBBlobs
-```
-
----
-
-### 2. Multi-Plane Security and Authentication Model
-
-```mermaid
-graph LR
-    subgraph Inbound Authentication Streams
-        DevReq[Developer Request]
-        SDKReq[SDK Data Request]
-        UserReq[End-User Request]
+    subgraph Layer9 ["9. Edge Physical Hardware Boundary"]
+        HardwareHost["ThinkPad Edge Hardware (Single-Node Host)<br/>• 4 GB Total Physical RAM Constraint<br/>• 256 MB Hard Memory Ceiling for Orchestrator<br/>• Zero Heavy Background Brokers (No Redis/Postgres Required)"]
     end
 
-    subgraph Security Layer
-        JWTDevValidator[JWT Validator: aud=developer]
-        APIKeyValidator[API Key Validator: SHA-256 Hash Compare]
-        JWTUserValidator[JWT Validator: aud=end_user]
-    end
+    WebConsole -->|HTTPS / WSS| CFTunnel
+    ExtClient -->|HTTPS REST| CFTunnel
+    ConsumerApp -->|HTTPS REST| CFTunnel
+    DevOpsCLI -->|HTTPS REST| CFTunnel
 
-    subgraph Scope & Boundary
-        AdminBoundary[Management Plane: Projects, Members, Schemas]
-        DataBoundary[Data Plane: Project-Specific Tables & Objects]
-        UserBoundary[Identity Pool: Project-Specific User Store]
-    end
+    CFTunnel -->|Host Loopback| CaddyProxy
+    CaddyProxy -->|Serve UI| WebConsole
+    CaddyProxy -->|Reverse Proxy :8000| SecHeaders
 
-    DevReq -->|Authorization: Bearer <Token>| JWTDevValidator
-    JWTDevValidator -->|RBAC: Owner / Admin / Dev / Viewer| AdminBoundary
+    SecHeaders --> RateLimiters
+    RateLimiters --> CORSPolicy
+    CORSPolicy --> TracingEnv
 
-    SDKReq -->|X-Project-API-Key: pk_live_***| APIKeyValidator
-    APIKeyValidator -->|Bound to project_id| DataBoundary
+    TracingEnv --> AuthRoutes
+    TracingEnv --> BaaSProjRoutes
+    TracingEnv --> BaaSAuthRoutes
+    TracingEnv --> BaaSStorageRoutes
+    TracingEnv --> HealthRoutes
 
-    UserReq -->|Authorization: Bearer <Token>| JWTUserValidator
-    JWTUserValidator -->|Bound to project_id & user_id| UserBoundary
-```
-
----
-
-### 3. Internal Platform Orchestrator Architecture
-
-```mermaid
-graph TB
-    subgraph API & Routing Layer
-        FastAPIApp[FastAPI Application Instance]
-        RateLimiter[Token Bucket Rate Limiter]
-        AuthMiddleware[Security Headers & CORS Middleware]
-        RouteAuth[Auth Routes]
-        RouteBaaS[BaaS Project Routes]
-        RouteStorage[BaaS Storage Routes]
-        RouteHealth[Platform Health Routes]
-    end
-
-    subgraph Core Service Coordination
-        BaaSService[BaaS Project Service Layer]
-        BaaSAuthService[BaaS Auth Service Layer]
-        BaaSStorageService[BaaS Storage Service Layer]
-        APIService[Internal API Service Layer]
-        Coordinator[Platform Operations Coordinator]
-    end
-
-    subgraph Operational Engines
-        LifecycleEng[Lifecycle Manager]
-        ValidationEng[Validation Engine]
-        DeploymentEng[Deployment Engine]
-        BackupEng[Backup Engine]
-        RestoreEng[Restore Engine]
-        HealthEng[Health Engine]
-        AuditEng[Audit Engine]
-        EventEng[Event Engine]
-    end
-
-    subgraph Adapters & Repositories
-        DockerAdapter[Docker Deployment Provider]
-        LocalStorageAdapter[Local Disk Storage Provider]
-        TenantConnFactory[SQLite Tenant Connection Factory]
-        TenantDBManager[Tenant Database Manager]
-        AuditRepo[SQLite Audit Repository]
-        HistoryRepo[SQLite History Repository]
-    end
-
-    FastAPIApp --> AuthMiddleware
-    AuthMiddleware --> RateLimiter
-    RateLimiter --> RouteAuth
-    RateLimiter --> RouteBaaS
-    RateLimiter --> RouteStorage
-    RateLimiter --> RouteHealth
-
-    RouteBaaS --> BaaSService
-    RouteAuth --> BaaSAuthService
-    RouteStorage --> BaaSStorageService
+    AuthRoutes --> APIService
+    BaaSProjRoutes --> BaaSService
+    BaaSAuthRoutes --> BaaSAuthService
+    BaaSStorageRoutes --> BaaSStorageService
+    HealthRoutes --> HealthEng
 
     BaaSService --> APIService
     BaaSService --> TenantDBManager
@@ -190,98 +152,235 @@ graph TB
     Coordinator --> EventEng
 
     DeploymentEng --> DockerAdapter
-    Coordinator --> AuditRepo
-    Coordinator --> HistoryRepo
+    AuditEng --> AuditDB
+    Coordinator --> HistoryDB
+    APIService --> ProjectsDB
+    BaaSService --> AuthzDB
+    AuthRoutes --> UsersDB
+    BaaSAuthRoutes --> RevocationsDB
+
+    TenantDBManager --> TenantConnFactory
+    TenantConnFactory --> AlphaDB
+    TenantConnFactory --> BetaDB
+    LocalStorageAdapter --> AlphaStorage
+    LocalStorageAdapter --> BetaStorage
+
+    CentralMetadata --- HardwareHost
+    TenantSandboxes --- HardwareHost
 ```
 
 ---
 
-### 4. Multi-Tenant Physical Data Isolation Boundary
+### Blueprint 2: Multi-Plane Cryptographic Security & Identity Boundary Lineage
 
 ```mermaid
 graph TD
-    subgraph Host Root Directory: /var/lib/auth-service/data
-        subgraph Shared Platform Metadata
-            users[(users.db: Developer Accounts)]
-            authz[(authz.db: Team RBAC & API Keys)]
-            projects[(projects.db: Registry & Lifecycles)]
-            audit[(audit.db: Immutable Audit Logs)]
-            history[(history.db: Operation Plans & Runs)]
-            revocations[(revocations.db: JWT JTI Denylist)]
-        end
-
-        subgraph Project Isolation Sandbox: projects/
-            subgraph Tenant Alpha: projects/proj_001/
-                AlphaDB[(data.db: Tables & End-Users)]
-                AlphaStorage[storage/: Blobs & Attachments]
-            end
-
-            subgraph Tenant Beta: projects/proj_002/
-                BetaDB[(data.db: Tables & End-Users)]
-                BetaStorage[storage/: Blobs & Attachments]
-            end
-        end
+    subgraph Plane1 ["Management Plane (Developer & Admin)"]
+        DevRequest["Developer HTTP Request"]
+        DevHeader["Authorization: Bearer <Developer_JWT>"]
+        JWTVerifyDev["PyJWT HS256 Verification<br/>• Secret: PLATFORM_SECRET_KEY<br/>• Enforce aud='developer'<br/>• Check Expiration (30 min)"]
+        RBACResolver["RBAC Permission Matrix<br/>• Check Role in authz.db<br/>• Roles: OWNER / ADMIN / DEVELOPER / VIEWER"]
+        DevOpsGranted["Management Action Permitted<br/>• Project Creation & Deletion<br/>• Team Member Invitations<br/>• Table Schema Alterations<br/>• Deployment & Backup Triggers"]
     end
 
-    classDef shared fill:#2d3748,stroke:#4a5568,color:#fff;
-    classDef tenant fill:#1a365d,stroke:#2b6cb0,color:#fff;
-    class users,authz,projects,audit,history,revocations shared;
-    class AlphaDB,AlphaStorage,BetaDB,BetaStorage tenant;
+    subgraph Plane2 ["Data Plane (SDK & External Applications)"]
+        SDKRequest["SDK / Application Request"]
+        APIKeyHeader["X-Project-API-Key: pk_live_<key_id>_<secret>"]
+        KeyLookup["Authz Lookup in authz.db<br/>• Lookup key_id<br/>• Verify is_active == True<br/>• Verify key.project_id == target_project_id"]
+        HashCompare["Constant-Time Hash Comparison<br/>• Compute actual_hash = SHA256(secret)<br/>• secrets.compare_digest(stored_hash, actual_hash)"]
+        DataOpsGranted["Data Plane Action Permitted<br/>• Parameterized Table Row CRUD<br/>• Sandboxed File Upload / Download<br/>• Scoped to Target Project Only"]
+    end
+
+    subgraph Plane3 ["End-User Identity Plane (Consumer Users)"]
+        UserRequest["Consumer End-User Request"]
+        UserHeader["Authorization: Bearer <EndUser_JWT>"]
+        JWTVerifyUser["PyJWT HS256 Verification<br/>• Secret: PLATFORM_SECRET_KEY<br/>• Enforce aud='end_user'<br/>• Verify project_id Claim Matches Target"]
+        DenylistCheck["Revocation Check in revocations.db<br/>• Assert jti NOT in revocations.db"]
+        UserOpsGranted["End-User Action Permitted<br/>• Consumer Profile Queries (/me)<br/>• Project-Isolated Consumer Data"]
+    end
+
+    DevRequest --> DevHeader --> JWTVerifyDev --> RBACResolver --> DevOpsGranted
+    SDKRequest --> APIKeyHeader --> KeyLookup --> HashCompare --> DataOpsGranted
+    UserRequest --> UserHeader --> JWTVerifyUser --> DenylistCheck --> UserOpsGranted
 ```
 
 ---
 
-### 5. End-to-End Request and Execution Lifecycle
+### Blueprint 3: Platform Operations Coordinator & Deterministic Engine Execution Pipeline
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Client as SDK / External App
-    participant Caddy as Caddy Gateway
-    participant RL as Rate Limiter
-    participant Sec as Auth & RBAC
-    participant Router as Project Router
-    participant Tenant as Tenant Factory
-    participant DB as SQLite Tenant DB
+    actor Caller as Developer / API Service
+    participant Coord as Platform Operations Coordinator
+    participant Mutex as Per-Project Lock (_active_operations)
+    participant Plan as Operation Plan Generator
+    participant Val as Validation Engine
+    participant Eng as Target Engine (Deploy / Backup / Restore)
+    participant Audit as Audit Engine
+    participant Event as Event Engine & DLQ
+    participant Hist as Operation History Repository
 
-    Client->>Caddy: POST /api/v1/baas/projects/{proj_id}/tables/tasks/rows
-    Note over Client,Caddy: Header: X-Project-API-Key: pk_live_***
-    Caddy->>RL: Forward HTTP Request
-    RL->>RL: Consume Token (10 req/s, Burst 100)
-    RL->>Sec: Rate limit passed
-    Sec->>Sec: Parse key, SHA-256 verify against authz.db
-    Sec->>Sec: Assert project_id match & key active
-    Sec->>Router: Inject validated project context
-    Router->>Router: Validate table & column identifier regex
-    Router->>Tenant: Acquire connection for proj_id
-    Tenant->>DB: Open data.db (WAL Mode, Timeout 5.0s)
-    DB->>DB: Execute parameterized INSERT query
-    DB-->>Tenant: Row ID returned
-    Tenant-->>Router: Commit & Release connection
-    Router-->>Client: 200 OK {"id": "row_123", "status": "created"}
+    Caller->>Coord: execute_operation(project_id, op_type, requested_by)
+    Coord->>Mutex: Acquire lock for project_id
+    alt Lock Already Held by Another Operation
+        Mutex-->>Coord: Conflict Detected
+        Coord->>Event: Emit Operation Rejected Event
+        Coord-->>Caller: 409 Conflict (Operation in Progress)
+    else Lock Successfully Acquired
+        Mutex-->>Coord: Lock Granted
+        Coord->>Plan: Generate OperationPlan (op_id, corr_id, timestamp)
+        Coord->>Audit: Record Audit Log (Category: Operations, Status: PENDING)
+        Coord->>Event: Emit Operation Started Event
+        
+        Coord->>Val: Run Preflight Validation Checks
+        alt Validation Fails
+            Val-->>Coord: Preflight ValidationError
+            Coord->>Audit: Record Audit Log (Status: FAILED, Reason: Validation)
+            Coord->>Event: Emit Operation Failed Event
+            Coord->>Hist: Record Terminal State (FAILED)
+            Coord->>Mutex: Release lock for project_id
+            Coord-->>Caller: OperationResult (Status: FAILED)
+        else Validation Passes
+            Val-->>Coord: Validation OK
+            Coord->>Eng: Dispatch to Engine (e.g. BackupEngine / DeploymentEngine)
+            Eng->>Eng: Execute Deterministic State Machine Steps
+            Eng-->>Coord: Execution Complete (result_data / manifest_id)
+            
+            Coord->>Audit: Record Audit Log (Status: SUCCESS)
+            Coord->>Event: Emit Operation Completed Event
+            Coord->>Hist: Record Terminal State (COMPLETED)
+            Coord->>Mutex: Release lock for project_id
+            Coord-->>Caller: OperationResult (Status: COMPLETED, manifest_id)
+        end
+    end
 ```
 
 ---
 
-### 6. Project Lifecycle and Operational State Machine
+### Blueprint 4: Deterministic Multi-Tenant Physical Isolation & SQLite Engine Topology
+
+```mermaid
+graph TD
+    subgraph HostDataRoot ["Persistent Host Volume: /var/lib/auth-service/data"]
+        subgraph CentralDBs ["Shared System & Coordination Databases"]
+            UDB["users.db<br/>• id (TEXT PK)<br/>• email (TEXT UNIQUE)<br/>• password_hash (Argon2id)"]
+            ADB["authz.db<br/>• project_members (user_id, role)<br/>• api_keys (key_id, secret_hash)"]
+            PDB["projects.db<br/>• project_id, name, slug<br/>• lifecycle_state (ACTIVE/PAUSED)"]
+            AUD["audit.db<br/>• audit_id, timestamp, category<br/>• severity, actor, metadata"]
+            HDB["history.db<br/>• operation_id, project_id<br/>• plan, status, duration"]
+            RDB["revocations.db<br/>• jti (TEXT PK)<br/>• revoked_at, expires_at"]
+        end
+
+        subgraph TenantDir ["Isolated Project Directory Tree: projects/"]
+            subgraph Proj1 ["projects/proj_001/"]
+                DB1[("data.db<br/>(WAL Mode, foreign_keys=ON)")]
+                Tables1["User Tables<br/>• id (TEXT PK)<br/>• Validated Identifiers<br/>• Parameterized Values"]
+                Auth1["_baas_users<br/>_baas_sessions"]
+                Storage1["_baas_objects<br/>(Metadata)"]
+                Files1["storage/<br/>• file_001.pdf<br/>• img_991.png<br/>(Max 5MB file, Max 100MB quota)"]
+            end
+
+            subgraph Proj2 ["projects/proj_002/"]
+                DB2[("data.db<br/>(WAL Mode, foreign_keys=ON)")]
+                Tables2["User Tables<br/>• id (TEXT PK)<br/>• Validated Identifiers<br/>• Parameterized Values"]
+                Auth2["_baas_users<br/>_baas_sessions"]
+                Storage2["_baas_objects<br/>(Metadata)"]
+                Files2["storage/<br/>• doc_771.pdf<br/>• data_881.bin<br/>(Max 5MB file, Max 100MB quota)"]
+            end
+        end
+    end
+
+    DB1 --- Tables1
+    DB1 --- Auth1
+    DB1 --- Storage1
+    Storage1 -.-> Files1
+
+    DB2 --- Tables2
+    DB2 --- Auth2
+    DB2 --- Storage2
+    Storage2 -.-> Files2
+```
+
+---
+
+### Blueprint 5: External Application (`TaskManager`) & Python SDK (`homelab_sdk`) Async Lineage
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as Developer / App Engine
+    participant SDK as HomelabClient (Python SDK)
+    participant Caddy as Caddy Gateway (:80/:443)
+    participant RL as Token Bucket Rate Limiter
+    participant Auth as Auth & RBAC Middleware
+    participant Core as FastAPI Backend Router
+    participant Tenant as Tenant DB Factory & Storage
+
+    Dev->>SDK: HomelabClient(base_url, developer_token)
+    Dev->>SDK: client.projects.create("Task Manager App", "task-mgr")
+    SDK->>Caddy: POST /api/v1/baas/projects
+    Caddy->>RL: Forward Request
+    RL->>Auth: Assert Developer Bearer Token
+    Auth->>Core: Dispatch to BaaSProjectServiceLayer
+    Core->>Tenant: Allocate Directory /var/lib/auth-service/data/projects/proj_task/
+    Tenant-->>Core: Initialized
+    Core-->>SDK: 201 Created {"project_id": "proj_task"}
+
+    Dev->>SDK: client.apikeys.create("proj_task", "live_key")
+    SDK->>Core: POST /api/v1/baas/projects/proj_task/apikeys
+    Core->>Core: Generate pk_live_key1_secret888, store SHA-256 in authz.db
+    Core-->>SDK: 200 OK {"key": "pk_live_key1_secret888"}
+
+    Dev->>SDK: client.schema.create("proj_task", "tasks", {"id": "text", "title": "text", "status": "text"})
+    SDK->>Core: POST /api/v1/baas/projects/proj_task/tables
+    Core->>Tenant: Execute CREATE TABLE "tasks" in proj_task/data.db
+    Tenant-->>SDK: 200 OK {"name": "tasks"}
+
+    Note over Dev,Tenant: Application Runtime with API Key
+    Dev->>SDK: HomelabClient(base_url, project_id="proj_task", api_key="pk_live_key1_secret888")
+    Dev->>SDK: client.db.insert("proj_task", "tasks", {"id": "task_1", "title": "Deploy API", "status": "pending"})
+    SDK->>Caddy: POST /api/v1/baas/projects/proj_task/tables/tasks/rows (X-Project-API-Key)
+    Caddy->>RL: Consume Data Plane Token
+    RL->>Auth: Verify SHA-256(secret888) == authz.db
+    Auth->>Tenant: Parameterized INSERT INTO "tasks" VALUES (?, ?, ?)
+    Tenant-->>SDK: 200 OK {"id": "task_1"}
+
+    Dev->>SDK: client.storage.upload("proj_task", "spec.pdf", binary_content)
+    SDK->>Core: POST /api/v1/baas/projects/proj_task/storage (Multipart)
+    Core->>Core: Enforce 5MB file limit & 100MB quota
+    Core->>Tenant: Write to proj_task/storage/file_uuid & Record in _baas_objects
+    Tenant-->>SDK: 201 Created {"id": "file_uuid", "size_bytes": 1048576}
+```
+
+---
+
+### Blueprint 6: 25-Phase Verification Matrix & Chaos Engineering State Machine
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Registered: Developer Creates Project
-    Registered --> Initialized: Run Validation Engine
-    Initialized --> Provisioned: Allocate SQLite DB & Storage Directory
-    Provisioned --> Active: Complete Health & Baseline Check
-    Active --> Paused: Explicit Stop / Pause Request
-    Paused --> Active: Resume / Redeploy Operation
-    Active --> Failed: Engine Failure / Health Degraded
-    Paused --> Failed: Storage Error / Corruption
-    Failed --> Active: Restore from Validated Backup
-    Active --> [*]: Project Teardown / Deletion
+    [*] --> Registered: Developer Provisions Project
+    Registered --> Initialized: Preflight Validation Engine Pass
+    Initialized --> Provisioned: Allocate SQLite DB & Sandboxed Blob Directory
+    Provisioned --> Active: Health Latency (<500ms) & Baseline Pass
+    
+    Active --> Paused: Explicit Stop / Pause API Invocation
+    Paused --> Active: Resume / Deploy Lifecycle Workflow
+    
+    Active --> Degraded: Latency > 500ms OR Free Disk < 500MB
+    Degraded --> Active: Resource Auto-Recovery / Load Subsides
+    
+    Active --> Failed: Container Crash / Storage Fault / Corrupted State
+    Paused --> Failed: Manifest Inconsistency / Disk Full (<100MB)
+    Degraded --> Failed: System Outage / Unhandled Panic
+    
+    Failed --> Active: RestoreEngine Restores from Verified Manifest
+    Active --> [*]: Project Deletion / Teardown
 ```
 
 ---
 
-## Repository Structure
+## 2. Repository Structure
 
 ```text
 Homelab/
@@ -380,7 +479,7 @@ Homelab/
 
 ---
 
-## Subsystem Deep Dives
+## 3. Subsystem Deep Dives
 
 ### 1. Identity, Authentication, and RBAC
 
@@ -472,7 +571,7 @@ The platform implements an in-memory Token Bucket algorithm with automatic Least
 
 ---
 
-## Python SDK Guide (`homelab-sdk`)
+## 4. Python SDK Guide (`homelab-sdk`)
 
 ### 1. Installation
 
@@ -618,7 +717,7 @@ profile = user_client.auth.get_me(project_id="proj_abcdef123456")
 
 ---
 
-## Management Dashboard UI
+## 5. Management Dashboard UI
 
 The platform includes a single-page management console located in `auth-service/dashboard/`:
 
@@ -641,7 +740,7 @@ npm run dev
 
 ---
 
-## 25-Phase Verification Roadmap & Audit
+## 6. 25-Phase Verification Roadmap & Audit
 
 The codebase strictly complies with the authoritative 25-Phase Roadmap. Every phase follows a rigorous progression from gap analysis to real verification locks:
 
@@ -672,7 +771,7 @@ The codebase strictly complies with the authoritative 25-Phase Roadmap. Every ph
 
 ---
 
-## Deployment & Getting Started
+## 7. Deployment & Getting Started
 
 ### Prerequisites
 
@@ -750,7 +849,7 @@ Expected JSON Response:
 
 ---
 
-## Security Invariants & Compliance
+## 8. Security Invariants & Compliance
 
 1. **No Plaintext Secrets:** Passwords are consistently hashed using Argon2id with automatic salt generation. Raw API keys (`pk_live_***`) are generated once and only stored as SHA-256 digests.
 2. **Explicit Cryptographic Algorithm:** JWT tokens strictly enforce `HS256`. Asymmetric fallback and none-algorithm bypasses are strictly prevented by PyJWT validation settings.
@@ -760,7 +859,8 @@ Expected JSON Response:
 
 ---
 
-## License
+## 9. License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
 
