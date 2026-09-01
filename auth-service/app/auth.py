@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
-from jose import JWTError, jwt
-from jose.exceptions import ExpiredSignatureError
+import jwt
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from passlib.context import CryptContext
 
 from app.config import config
@@ -32,7 +32,7 @@ def decode_token(token: str, expected_aud: str | None = None):
             algorithms=["HS256"],
             **kwargs
         )
-    except (ExpiredSignatureError, JWTError):
+    except (ExpiredSignatureError, InvalidTokenError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",

@@ -68,7 +68,7 @@ The approved master roadmap originally grouped the capabilities broadly as:
 - Phase 15 — Security + Reliability Audit
 - Phase 16 — Real External-App Integration
 - Phase 17 — Production Deployment
-- Phase 18 — Final Verification / Release
+- Phase 18 — Final Verification / Release 🔒 LOCKED
 
 The phase numbers were explicitly allowed to be adjusted if the grouping was improved, provided the dependency/order remained essentially unchanged. Therefore the later execution numbering must be tracked carefully so that **no capability disappears merely because its phase number moved**.
 
@@ -659,7 +659,7 @@ Phase 18 must be a review of the complete security perimeter, not an excuse to i
 
 ---
 
-# PHASE 19 — RELIABILITY + FAILURE TESTING
+# PHASE 19 — RELIABILITY + FAILURE TESTING 🔒 LOCKED
 
 This phase deliberately breaks the system in controlled ways.
 
@@ -979,7 +979,8 @@ Current locked execution history:
 | 14.3 | Deployment Integration | `874a107` | LOCKED |
 | 14.4 | Monitoring | `feb33f3` | LOCKED |
 | 15 | Security + Reliability Audit | `21e2e02` | LOCKED |
-| 16 | Dashboard / Frontend | — | NEXT |
+| 16 | Dashboard / Frontend | `23715f3` | LOCKED |
+| 17 | Advanced Routing & Production Ingress | `edae9ac` | LOCKED |
 
 ### Important capability bookkeeping
 
@@ -991,13 +992,13 @@ Likewise, Phase 18 remains the final adversarial security review even though sec
 
 # Current Checkpoint
 
-**Locked execution phase:** Phase 15 — Security + Reliability Audit
+**Locked execution phase:** Phase 25 — FINAL RELEASE VERIFICATION 🔒 LOCKED
 
-**Locked commit:** `21e2e02163834c48898d7ae98c93413c01088ee2`
+**Locked commit:** `07c223f`
 
-**Next execution phase:** Phase 16 — Dashboard / Frontend
+**Next execution phase:** There is no Phase 26. Phase 25 is the final phase.
 
-**Phase 16 rule:** Do not implement from assumptions. Use the exact Phase 16 definition above, then perform the normal read-only preflight → gap analysis → boundary audit → decisions → implementation plan → approval → implementation → verification pipeline.
+**Phase 25 rule:** Preserve the standard mandatory 25-phase workflow: read-only preflight → gap analysis → boundary audit → decisions → implementation plan → approval → implementation → verification.
 
 ---
 

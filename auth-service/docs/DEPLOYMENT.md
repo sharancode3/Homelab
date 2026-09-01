@@ -32,14 +32,15 @@ It leverages local storage by default (mounted via Docker volumes) and handles a
    ```
 
 2. **Configure environment:**
-   Create a `.env` file (optional if relying on defaults):
+   Create a `.env` file (optional if relying on defaults). Note: This file contains sensitive keys and is explicitly ignored by `.gitignore` to prevent secret leakage.
    ```bash
    PLATFORM_ENVIRONMENT=production
    PLATFORM_DEBUG=false
-   PLATFORM_SECRET_KEY=super-secure-key
+   PLATFORM_SECRET_KEY=<YOUR_SECURE_GENERATED_KEY>
    ```
 
 3. **Build and Run:**
+   The `platform-orchestrator` service is explicitly constrained to `256M` memory in `docker-compose.yml` to prevent resource starvation on the host.
    ```bash
    docker-compose up -d --build
    ```

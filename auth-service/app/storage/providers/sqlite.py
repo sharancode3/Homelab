@@ -216,10 +216,15 @@ class SQLiteOperationHistoryRepository(OperationHistoryRepository):
                 completed_steps TEXT NOT NULL,
                 failures TEXT NOT NULL,
                 compensation_result TEXT NOT NULL,
-                project_id TEXT
+                project_id TEXT,
+                result TEXT DEFAULT '{}'
             )
             """
         )
+        try:
+            self._conn.execute("ALTER TABLE operation_history ADD COLUMN result TEXT DEFAULT '{}'")
+        except sqlite3.OperationalError:
+            pass
         # Add an index on project_id since we will query by it
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_op_project_id ON operation_history(project_id)"
@@ -231,8 +236,8 @@ class SQLiteOperationHistoryRepository(OperationHistoryRepository):
             self._conn.execute(
                 """
                 INSERT INTO operation_history (
-                    operation_id, status, completed_steps, failures, compensation_result, project_id
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    operation_id, status, completed_steps, failures, compensation_result, project_id, result
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     result.operation_id,
@@ -240,7 +245,8 @@ class SQLiteOperationHistoryRepository(OperationHistoryRepository):
                     json.dumps(result.completed_steps),
                     json.dumps(result.failures),
                     json.dumps(result.compensation_result),
-                    project_id
+                    project_id,
+                    json.dumps(result.result),
                 ),
             )
             self._conn.commit()
@@ -268,12 +274,18 @@ class SQLiteOperationHistoryRepository(OperationHistoryRepository):
         return [self._row_to_result(row) for row in rows]
 
     def _row_to_result(self, row: sqlite3.Row) -> OperationResult:
+        try:
+            result_payload = json.loads(row["result"])
+        except (KeyError, ValueError):
+            result_payload = {}
+
         return OperationResult(
             operation_id=row["operation_id"],
             status=OperationStatus(row["status"]),
             completed_steps=tuple(json.loads(row["completed_steps"])),
             failures=tuple(json.loads(row["failures"])),
             compensation_result=json.loads(row["compensation_result"]),
+            result=result_payload,
         )
 
 class SQLiteUserRepository(UserRepository):

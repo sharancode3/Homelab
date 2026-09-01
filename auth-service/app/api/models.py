@@ -44,6 +44,7 @@ class OperationResponse(BaseModel):
     status: str
     completed_steps: list[str] = Field(default_factory=list)
     failures: list[str] = Field(default_factory=list)
+    result: dict[str, Any] = Field(default_factory=dict)
 
 
 class HealthResponse(BaseModel):
@@ -90,6 +91,7 @@ class OperationHistoryEntry(BaseModel):
     status: str
     completed_steps: list[str] = Field(default_factory=list)
     failures: list[str] = Field(default_factory=list)
+    result: dict[str, Any] = Field(default_factory=dict)
 
 
 class OperationHistoryResponse(BaseModel):

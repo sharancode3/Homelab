@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: homelab-postgres-test
+    restart: unless-stopped
+    env_file:
+      - .env.test
+    volumes:
+      - postgres_data_test:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio:latest
+    container_name: homelab-minio-test
+    restart: unless-stopped
+    env_file:
+      - .env.test
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data_test:/data
+
+  auth-service:
+    build: ../..
+    container_name: homelab-auth-test
+    restart: unless-stopped
+    env_file:
+      - .env.test
+    depends_on:
+      - postgres
+    volumes:
+      - platform_data_test:/var/lib/auth-service/data
+
+  caddy:
+    image: caddy:2
+    container_name: homelab-caddy-test
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    volumes:
+      - ./Caddyfile.test:/etc/caddy/Caddyfile
+      - ../../dashboard/dist:/var/www/frontend:ro
+    depends_on:
+      - auth-service
+
+volumes:
+  postgres_data_test:
+  minio_data_test:
+  platform_data_test:

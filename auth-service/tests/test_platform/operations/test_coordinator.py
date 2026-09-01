@@ -55,6 +55,7 @@ class MockEngineResult:
     def __init__(self, success: bool, message: str = ""):
         self.success = success
         self.message = message
+        self.manifest = None
 
 class PlatformOperationsCoordinatorTestCase(unittest.TestCase):
     def setUp(self) -> None:

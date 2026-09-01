@@ -3,8 +3,9 @@ uvicorn[standard]
 sqlalchemy
 psycopg[binary]
 python-dotenv
-python-jose[cryptography]
+PyJWT
 passlib[argon2]
 pydantic-settings
 email-validator
 psutil
+python-multipart

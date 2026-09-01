@@ -22,3 +22,4 @@ class OperationResult:
     completed_steps: tuple[str, ...]
     failures: tuple[str, ...]
     compensation_result: dict[str, Any] = field(default_factory=dict)
+    result: dict[str, Any] = field(default_factory=dict)

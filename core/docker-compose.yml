@@ -7,9 +7,6 @@ services:
     env_file:
       - .env
 
-    ports:
-      - "5432:5432"
-
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -23,10 +20,6 @@ services:
 
     command: server /data --console-address ":9001"
 
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-
     volumes:
       - minio_data:/data
 
@@ -34,15 +27,20 @@ services:
     build: ../auth-service
     container_name: homelab-auth
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
     env_file:
       - ../auth-service/.env
-
-    ports:
-      - "8000:8000"
+      - .env
 
     depends_on:
       - postgres
+
+    volumes:
+      - platform_data:/var/lib/auth-service/data
 
   caddy:
     image: caddy:2
@@ -55,10 +53,22 @@ services:
 
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
+      - ../auth-service/dashboard/dist:/var/www/frontend:ro
 
     depends_on:
       - auth-service
 
+  cloudflared:
+    image: cloudflare/cloudflared:2024.1.5
+    container_name: homelab-tunnel
+    restart: unless-stopped
+    command: tunnel run
+    env_file:
+      - .env
+    depends_on:
+      - caddy
+
 volumes:
   postgres_data:
   minio_data:
+  platform_data:
