@@ -174,34 +174,21 @@ graph TD
 ### Blueprint 2: Multi-Plane Cryptographic Security & Identity Boundary Lineage
 
 ```mermaid
-graph TD
+graph LR
     subgraph Plane1 ["Management Plane (Developer & Admin)"]
-        DevRequest["Developer HTTP Request"]
-        DevHeader["Authorization: Bearer <Developer_JWT>"]
-        JWTVerifyDev["PyJWT HS256 Verification<br/>• Secret: PLATFORM_SECRET_KEY<br/>• Enforce aud='developer'<br/>• Check Expiration (30 min)"]
-        RBACResolver["RBAC Permission Matrix<br/>• Check Role in authz.db<br/>• Roles: OWNER / ADMIN / DEVELOPER / VIEWER"]
-        DevOpsGranted["Management Action Permitted<br/>• Project Creation & Deletion<br/>• Team Member Invitations<br/>• Table Schema Alterations<br/>• Deployment & Backup Triggers"]
+        direction LR
+        DevReq["Developer Ingress<br/>Authorization: Bearer <JWT>"] --> DevJWT["PyJWT HS256 Validator<br/>• Secret: PLATFORM_SECRET_KEY<br/>• Enforce: aud='developer'<br/>• Expiration: 30 minutes"] --> DevRBAC["RBAC Matrix (authz.db)<br/>• OWNER / ADMIN<br/>• DEVELOPER / VIEWER"] --> DevAction["Permitted Operations<br/>• Project / Team Lifecycle<br/>• Schemas & Deployments"]
     end
 
     subgraph Plane2 ["Data Plane (SDK & External Applications)"]
-        SDKRequest["SDK / Application Request"]
-        APIKeyHeader["X-Project-API-Key: pk_live_<key_id>_<secret>"]
-        KeyLookup["Authz Lookup in authz.db<br/>• Lookup key_id<br/>• Verify is_active == True<br/>• Verify key.project_id == target_project_id"]
-        HashCompare["Constant-Time Hash Comparison<br/>• Compute actual_hash = SHA256(secret)<br/>• secrets.compare_digest(stored_hash, actual_hash)"]
-        DataOpsGranted["Data Plane Action Permitted<br/>• Parameterized Table Row CRUD<br/>• Sandboxed File Upload / Download<br/>• Scoped to Target Project Only"]
+        direction LR
+        SDKReq["SDK Application Ingress<br/>X-Project-API-Key: pk_live_*"] --> KeyLookup["Key Lookup (authz.db)<br/>• Key ID Active Check<br/>• Project ID Binding"] --> HashCheck["Constant-Time Compare<br/>• Compute: SHA256(secret)<br/>• secrets.compare_digest()"] --> DataAction["Permitted Operations<br/>• Parameterized Row CRUD<br/>• Sandboxed Blob Storage"]
     end
 
-    subgraph Plane3 ["End-User Identity Plane (Consumer Users)"]
-        UserRequest["Consumer End-User Request"]
-        UserHeader["Authorization: Bearer <EndUser_JWT>"]
-        JWTVerifyUser["PyJWT HS256 Verification<br/>• Secret: PLATFORM_SECRET_KEY<br/>• Enforce aud='end_user'<br/>• Verify project_id Claim Matches Target"]
-        DenylistCheck["Revocation Check in revocations.db<br/>• Assert jti NOT in revocations.db"]
-        UserOpsGranted["End-User Action Permitted<br/>• Consumer Profile Queries (/me)<br/>• Project-Isolated Consumer Data"]
+    subgraph Plane3 ["End-User Identity Plane (Consumer Pool)"]
+        direction LR
+        UserReq["Consumer End-User Ingress<br/>Authorization: Bearer <JWT>"] --> UserJWT["PyJWT HS256 Validator<br/>• Secret: PLATFORM_SECRET_KEY<br/>• Enforce: aud='end_user'<br/>• Verify: project_id Claim"] --> Denylist["Denylist (revocations.db)<br/>• Assert jti Not Revoked<br/>• Active Session Check"] --> UserAction["Permitted Operations<br/>• Consumer Auth & Profile<br/>• Tenant-Isolated Tables"]
     end
-
-    DevRequest --> DevHeader --> JWTVerifyDev --> RBACResolver --> DevOpsGranted
-    SDKRequest --> APIKeyHeader --> KeyLookup --> HashCompare --> DataOpsGranted
-    UserRequest --> UserHeader --> JWTVerifyUser --> DenylistCheck --> UserOpsGranted
 ```
 
 ---
